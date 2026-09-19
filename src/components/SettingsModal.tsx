@@ -376,8 +376,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="bg-white/80 p-2.5 rounded-lg border border-emerald-200/80 text-[11px] text-slate-700 space-y-1">
               <div className="flex justify-between items-center">
                 <span className="text-slate-500 font-medium">{isRtl ? 'کلاؤڈ ڈیٹا بیس:' : 'Cloud Database:'}</span>
-                <span className="font-mono text-[10px] font-bold text-emerald-900 truncate max-w-[170px]" title="ai-studio-azadmastertailor-5ebcf705-17cc-4a0d-a990-93d623364a7a">
-                  azadmastertailor (Firestore)
+                <span className="font-mono text-[10px] font-bold text-emerald-900 truncate max-w-[170px]" title="azad-master (Firestore)">
+                  azad-master (Firestore)
                 </span>
               </div>
               <div className="flex justify-between items-center">

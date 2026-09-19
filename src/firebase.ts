@@ -31,8 +31,10 @@ import { Customer } from './types';
 // Firebase Initialization
 const app = initializeApp(firebaseConfig);
 
-// CRITICAL: Must pass firebaseConfig.firestoreDatabaseId as required for Firestore Enterprise in AI Studio
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Use default Firestore database of the azad-master project
+export const db = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
+  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+  : getFirestore(app);
 export const auth = getAuth(app);
 
 // Enable local persistence

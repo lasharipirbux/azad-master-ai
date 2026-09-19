@@ -1,12 +1,12 @@
 {
-  "projectId": "empyrean-rigging-4lcf1",
-  "appId": "1:233024949239:web:977cadbde0f974b5ae3cf2",
-  "apiKey": "AIzaSyAjQ7cTB4kH77svICmQGCdhbhSz5IXUpCY",
-  "authDomain": "empyrean-rigging-4lcf1.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-azadmastertailor-5ebcf705-17cc-4a0d-a990-93d623364a7a",
-  "storageBucket": "empyrean-rigging-4lcf1.firebasestorage.app",
-  "messagingSenderId": "233024949239",
+  "projectId": "azad-master",
+  "appId": "1:000000000000:web:azadmasterapp",
+  "apiKey": "AIzaSyAzadMasterPlaceholderKey",
+  "authDomain": "azad-master.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "azad-master.firebasestorage.app",
+  "messagingSenderId": "000000000000",
   "measurementId": "",
-  "oAuthClientId": "233024949239-q8uoq10lbaljbm3fob8396k8us09sl6n.apps.googleusercontent.com",
+  "oAuthClientId": "",
   "recaptchaSiteKey": ""
 }
