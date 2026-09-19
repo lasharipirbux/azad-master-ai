@@ -1,0 +1,112 @@
+import { Customer } from '../types';
+
+export const initialCustomers: Customer[] = [
+  {
+    id: 1710758400000,
+    name: "peer bakhash",
+    phone: "+92 03002073445",
+    suitType: "Shalwar Qameez",
+    status: "cutting",
+    details: "Length (لمبائی) : 42\nShoulder (تیرہ) : 19.5\nSleeve (بازو) : 24\nChest (چھاتی) : 41\nWaist (کمر) : 38\nDaaman (گھیر) : 24\nCollar/Ban (کالر/بین) : 16 (Ban Collar)\nShalwar (شلوار) : 39.5\nPancha (پانچا) : 8.5\nPocket (پکٹ) : 1 Front, 2 Side, 1 Secret\nNotes (ہدایات) : Master fitting, double top stitch.",
+    measurementsObj: {
+      length: "42",
+      shoulder: "19.5",
+      sleeves: "24",
+      chest: "41",
+      waist: "38",
+      daaman: "24",
+      collar: "16 (Ban Collar)",
+      shalwar: "39.5",
+      pancha: "8.5",
+      pocket: "1 Front, 2 Side, 1 Secret",
+      specialNotes: "Master fitting, double top stitch."
+    },
+    imageUri: null,
+    date: "18/09/2026",
+    deliveryDate: "18/09/2026",
+    totalAmount: "1500",
+    advanceAmount: "500",
+    balanceAmount: "1000"
+  },
+  {
+    id: 1710672000000,
+    name: "Haji Muhammad Aslam",
+    phone: "+92 3001234567",
+    suitType: "Shalwar Qameez",
+    status: "cutting",
+    details: "Length (لمبائی) : 42\nShoulder (تیرہ) : 18.5\nSleeve (بازو) : 24\nChest (چھاتی) : 40\nWaist (کمر) : 38\nDaaman (گھیر) : 23\nCollar/Ban (کالر/بین) : 15.5 (Ban Collar)\nShalwar (شلوار) : 39\nPancha (پانچا) : 8.5\nPocket (پکٹ) : 1 Front, 2 Side, 1 Secret\nNotes (ہدایات) : Double stitch, soft collar, round daaman.",
+    measurementsObj: {
+      length: "42",
+      shoulder: "18.5",
+      sleeves: "24",
+      chest: "40",
+      waist: "38",
+      daaman: "23",
+      collar: "15.5 (Ban Collar)",
+      shalwar: "39",
+      pancha: "8.5",
+      pocket: "1 Front, 2 Side, 1 Secret",
+      specialNotes: "Double stitch, soft collar, round daaman."
+    },
+    imageUri: null,
+    date: "10/09/2026",
+    deliveryDate: "16/09/2026",
+    totalAmount: "1400",
+    advanceAmount: "1400",
+    balanceAmount: "0"
+  },
+  {
+    id: 1710585600000,
+    name: "Tariq Mahmood",
+    phone: "+92 321 9876543",
+    suitType: "Kurta Pajama",
+    status: "stitching",
+    details: "Length (لمبائی) : 40.5\nShoulder (تیرہ) : 17.5\nSleeve (بازو) : 23\nChest (چھاتی) : 37\nWaist (کمر) : 34\nDaaman (گھیر) : 21\nCollar/Ban (کالر/بین) : 15 (Shirt Collar)\nShalwar (شلوار) : 37.5\nPancha (پانچا) : 7.5\nPocket (پکٹ) : 1 Front, 1 Side\nNotes (ہدایات) : Slim fit cut, straight daaman, contrast buttons.",
+    measurementsObj: {
+      length: "40.5",
+      shoulder: "17.5",
+      sleeves: "23",
+      chest: "37",
+      waist: "34",
+      daaman: "21",
+      collar: "15 (Shirt Collar)",
+      shalwar: "37.5",
+      pancha: "7.5",
+      pocket: "1 Front, 1 Side",
+      specialNotes: "Slim fit cut, straight daaman, contrast buttons."
+    },
+    imageUri: null,
+    date: "12/09/2026",
+    deliveryDate: "17/09/2026",
+    totalAmount: "1200",
+    advanceAmount: "0",
+    balanceAmount: "1200"
+  },
+  {
+    id: 1710499200000,
+    name: "Sheikh Abdul Rehman",
+    phone: "+966 501234567",
+    suitType: "Saudi Thobe",
+    status: "ready",
+    details: "Length (لمبائی) : 56\nShoulder (تیرہ) : 19\nSleeve (بازو) : 25\nChest (چھاتی) : 42\nWaist (کمر) : 40\nDaaman (گھیر) : 28\nCollar/Ban (کالر/بین) : 16 (Saudi Collar)\nShalwar (شلوار) : Standard\nPancha (پانچا) : None\nPocket (پکٹ) : 1 Front, 2 Side deep\nNotes (ہدایات) : Classic Saudi Thobe cut, stiff collar, hidden zipper.",
+    measurementsObj: {
+      length: "56",
+      shoulder: "19",
+      sleeves: "25",
+      chest: "42",
+      waist: "40",
+      daaman: "28",
+      collar: "16 (Saudi Collar)",
+      shalwar: "Standard",
+      pancha: "None",
+      pocket: "1 Front, 2 Side deep",
+      specialNotes: "Classic Saudi Thobe cut, stiff collar, hidden zipper."
+    },
+    imageUri: null,
+    date: "14/09/2026",
+    deliveryDate: "18/09/2026",
+    totalAmount: "2500",
+    advanceAmount: "1000",
+    balanceAmount: "1500"
+  }
+];

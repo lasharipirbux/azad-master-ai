@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <defs>
+    <radialGradient id="favBg" cx="50%" cy="45%" r="65%">
+      <stop offset="0%" stop-color="#128c7e" />
+      <stop offset="60%" stop-color="#075e54" />
+      <stop offset="100%" stop-color="#043a34" />
+    </radialGradient>
+    <linearGradient id="favGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fff6b3" />
+      <stop offset="30%" stop-color="#fcd34d" />
+      <stop offset="60%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#92400e" />
+    </linearGradient>
+    <linearGradient id="favTape" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="50%" stop-color="#eab308" />
+      <stop offset="100%" stop-color="#ca8a04" />
+    </linearGradient>
+  </defs>
+
+  <rect width="500" height="500" rx="110" fill="url(#favBg)" stroke="#25d366" stroke-width="8" />
+
+  <!-- Outer Stitching Accent -->
+  <rect x="28" y="28" width="444" height="444" rx="86" fill="none" stroke="url(#favGold)" stroke-width="4" stroke-dasharray="12 10" opacity="0.6" />
+
+  <!-- Inner Crest Circle -->
+  <circle cx="250" cy="220" r="130" fill="#064e43" stroke="url(#favGold)" stroke-width="6" />
+
+  <!-- Measuring Tape Arc -->
+  <path d="M140 250 C170 330, 330 330, 360 250" fill="none" stroke="url(#favTape)" stroke-width="16" stroke-linecap="round" />
+  <path d="M148 252 C175 326, 325 326, 352 252" fill="none" stroke="#78350f" stroke-width="2.5" stroke-dasharray="4 6" />
+
+  <!-- Golden Tailor Shears -->
+  <!-- Left Blade -->
+  <path d="M220 260 L325 110 C330 102, 342 106, 336 118 L248 272 Z" fill="url(#favGold)" stroke="#78350f" stroke-width="1.5" />
+  <!-- Right Blade -->
+  <path d="M280 260 L175 110 C170 102, 158 106, 164 118 L252 272 Z" fill="url(#favGold)" stroke="#78350f" stroke-width="1.5" />
+  <!-- Center Pivot Screw -->
+  <circle cx="250" cy="205" r="10" fill="url(#favGold)" stroke="#78350f" stroke-width="2" />
+  <circle cx="250" cy="205" r="4.5" fill="#043a34" />
+
+  <!-- Left Handle -->
+  <ellipse cx="200" cy="285" rx="22" ry="36" fill="none" stroke="url(#favGold)" stroke-width="11" transform="rotate(-30 200 285)" />
+  <!-- Right Handle -->
+  <ellipse cx="300" cy="285" rx="22" ry="36" fill="none" stroke="url(#favGold)" stroke-width="11" transform="rotate(30 300 285)" />
+
+  <!-- Silk Needle Thread -->
+  <path d="M250 85 L250 290" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.95" />
+  <ellipse cx="250" cy="98" rx="1.5" ry="4" fill="#043a34" />
+  <path d="M250 98 C225 75, 195 85, 205 120 C215 155, 275 135, 290 170 C300 195, 280 225, 260 235" fill="none" stroke="#25d366" stroke-width="3.5" stroke-linecap="round" />
+
+  <!-- AZAD MASTER Text -->
+  <text x="250" y="435" font-family="'Plus Jakarta Sans', sans-serif" font-size="42" font-weight="900" letter-spacing="4" fill="url(#favGold)" stroke="#382103" stroke-width="1.2" text-anchor="middle">
+    AZAD MASTER
+  </text>
+</svg>

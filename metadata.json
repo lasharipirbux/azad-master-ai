@@ -1,0 +1,6 @@
+{
+  "name": "Azad Master - Tailoring Management",
+  "description": "Secure tailoring digital cutting slips and customer measurement management system with multi-language support and WhatsApp integration.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

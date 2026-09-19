@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <defs>
+    <!-- Background Radial Gradient in WhatsApp Deep Emerald Theme -->
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#128c7e" />
+      <stop offset="60%" stop-color="#075e54" />
+      <stop offset="100%" stop-color="#043a34" />
+    </radialGradient>
+
+    <!-- Metallic Gold Gradients for Tailor Shears, Needle, and Typography -->
+    <linearGradient id="gold3d" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fff6b3" />
+      <stop offset="25%" stop-color="#fcd34d" />
+      <stop offset="50%" stop-color="#d97706" />
+      <stop offset="75%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#92400e" />
+    </linearGradient>
+
+    <linearGradient id="emeraldAccent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4ade80" />
+      <stop offset="50%" stop-color="#25d366" />
+      <stop offset="100%" stop-color="#128c7e" />
+    </linearGradient>
+
+    <!-- Measuring Tape Gradient -->
+    <linearGradient id="tapeGrad" x1="0%" y1="0%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="50%" stop-color="#eab308" />
+      <stop offset="100%" stop-color="#ca8a04" />
+    </linearGradient>
+
+    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000000" flood-opacity="0.45" />
+    </filter>
+
+    <filter id="goldGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Circular Outer Background Canvas -->
+  <circle cx="250" cy="250" r="248" fill="url(#bgGrad)" stroke="#25d366" stroke-width="4" />
+
+  <!-- Outer Circular Elegant Gold Stitching Border -->
+  <circle cx="250" cy="250" r="236" fill="none" stroke="url(#gold3d)" stroke-width="3" stroke-dasharray="10 8" opacity="0.8" />
+  <circle cx="250" cy="250" r="226" fill="none" stroke="url(#gold3d)" stroke-width="1.2" opacity="0.45" />
+
+  <!-- Central Circular Crest / Emblem Badge -->
+  <g filter="url(#softShadow)">
+    <circle cx="250" cy="185" r="120" fill="#064e43" stroke="url(#gold3d)" stroke-width="5" />
+    <circle cx="250" cy="185" r="110" fill="none" stroke="url(#emeraldAccent)" stroke-width="2" stroke-dasharray="6 6" />
+
+    <!-- Measuring Tape Loop around the Badge -->
+    <path d="M150 215 C175 285, 325 285, 350 215" fill="none" stroke="url(#tapeGrad)" stroke-width="14" stroke-linecap="round" />
+    <path d="M157 217 C180 282, 320 282, 343 217" fill="none" stroke="#78350f" stroke-width="2" stroke-dasharray="3 5" />
+
+    <!-- Crossed Golden Professional Master Tailor Shears -->
+    <g id="tailor-shears" filter="url(#goldGlow)">
+      <!-- Left Shears Blade -->
+      <path d="M220 225 L315 90 C320 83, 330 87, 325 97 L245 235 Z" fill="url(#gold3d)" stroke="#78350f" stroke-width="1" />
+      <!-- Right Shears Blade -->
+      <path d="M280 225 L185 90 C180 83, 170 87, 175 97 L255 235 Z" fill="url(#gold3d)" stroke="#78350f" stroke-width="1" />
+      <!-- Shears Pivot Screw -->
+      <circle cx="250" cy="175" r="8" fill="url(#gold3d)" stroke="#78350f" stroke-width="1.5" />
+      <circle cx="250" cy="175" r="4" fill="#043a34" />
+      
+      <!-- Left Handle Loop -->
+      <ellipse cx="205" cy="250" rx="20" ry="32" fill="none" stroke="url(#gold3d)" stroke-width="10" transform="rotate(-30 205 250)" />
+      <!-- Right Handle Loop -->
+      <ellipse cx="295" cy="250" rx="20" ry="32" fill="none" stroke="url(#gold3d)" stroke-width="10" transform="rotate(30 295 250)" />
+    </g>
+
+    <!-- Golden Needle & Thread Piercing the Center -->
+    <g id="needle-thread">
+      <path d="M250 75 L250 255" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.95" />
+      <!-- Needle Eye -->
+      <ellipse cx="250" cy="88" rx="1.5" ry="4" fill="#043a34" />
+      <!-- Emerald Silk Thread Flowing -->
+      <path d="M250 88 C230 66, 200 76, 210 106 C220 136, 270 116, 285 146 C295 166, 280 196, 260 206" fill="none" stroke="url(#emeraldAccent)" stroke-width="3" stroke-linecap="round" />
+    </g>
+  </g>
+
+  <!-- Urdu & English Master Brand Typography -->
+  <g id="brand-typography" filter="url(#softShadow)" transform="translate(0, 10)">
+    <!-- Urdu Calligraphy Style Subtitle -->
+    <text x="250" y="355" font-family="'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Plus Jakarta Sans', serif" font-size="34" font-weight="bold" fill="url(#gold3d)" text-anchor="middle">
+      آزاد ماسٹر
+    </text>
+
+    <!-- English AZAD Text -->
+    <text x="250" y="400" font-family="'Plus Jakarta Sans', 'Segoe UI', Impact, sans-serif" font-size="44" font-weight="900" letter-spacing="6" fill="url(#gold3d)" stroke="#523204" stroke-width="1.2" text-anchor="middle">
+      AZAD
+    </text>
+
+    <!-- MASTER & Separator Bars -->
+    <line x1="85" y1="428" x2="140" y2="428" stroke="url(#gold3d)" stroke-width="3" stroke-linecap="round" />
+    <text x="250" y="436" font-family="'Plus Jakarta Sans', 'Segoe UI', Impact, sans-serif" font-size="26" font-weight="900" letter-spacing="8" fill="#ffffff" text-anchor="middle">
+      MASTER
+    </text>
+    <line x1="360" y1="428" x2="415" y2="428" stroke="url(#gold3d)" stroke-width="3" stroke-linecap="round" />
+  </g>
+</svg>

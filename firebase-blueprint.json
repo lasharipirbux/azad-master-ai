@@ -1,0 +1,50 @@
+{
+  "entities": {
+    "TailoringCustomer": {
+      "title": "Tailoring Customer Record",
+      "description": "Customer digital tailoring slip, measurements, and billing details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "name": { "type": "string", "maxLength": 150 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "date": { "type": "string", "maxLength": 50 },
+        "details": { "type": "string", "maxLength": 2000 },
+        "suitType": { "type": "string", "maxLength": 50 },
+        "status": { "type": "string", "maxLength": 30 },
+        "totalAmount": { "type": "string", "maxLength": 30 },
+        "advanceAmount": { "type": "string", "maxLength": 30 },
+        "balanceAmount": { "type": "string", "maxLength": 30 },
+        "measurementsObj": { "type": "object" },
+        "imageUri": { "type": "string", "maxLength": 500000 },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "phone"]
+    },
+    "TailoringOrder": {
+      "title": "Tailoring Order",
+      "description": "Garment measurements and customer order information",
+      "type": "object",
+      "properties": {
+        "customerName": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "measurements": { "type": "object" },
+        "suitType": { "type": "string", "maxLength": 50 },
+        "status": { "type": "string", "maxLength": 30 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["measurements"]
+    }
+  },
+  "firestore": {
+    "/tailoring_customers/{customerId}": {
+      "schema": "TailoringCustomer",
+      "description": "Collection of all customer tailoring slips, measurements, and billing accounts for cloud auto-save"
+    },
+    "/tailoring_orders/{orderId}": {
+      "schema": "TailoringOrder",
+      "description": "Collection of confirmed tailoring orders and measurements"
+    }
+  }
+}
