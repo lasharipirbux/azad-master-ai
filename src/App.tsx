@@ -1,35 +1,34 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Customer, CustomerMeasurements, SupportedLanguage, OrderStatus } from './types';
 import { translations, languageList } from './data/translations';
-import { initialCustomers } from './data/sampleData';
 import { DigitalSlipModal } from './components/DigitalSlipModal';
 import { AddMeasurementModal } from './components/AddMeasurementModal';
 import { ChatbotModal } from './components/ChatbotModal';
 import { SettingsModal } from './components/SettingsModal';
 import { PrivacyModal } from './components/PrivacyModal';
 import { AppGuideModal } from './components/AppGuideModal';
-import { CountrySelectorModal } from './components/CountrySelectorModal';
 import { RecentOrdersQuickView } from './components/RecentOrdersQuickView';
 import { CustomerSearchComponent } from './components/CustomerSearchComponent';
 import { SlimSummaryHeader } from './components/SlimSummaryHeader';
 import { CustomDrawerMenu } from './components/CustomDrawerMenu';
 import { SplashScreen } from './components/SplashScreen';
 import { compressImageForOcr } from './utils/imageCompressor';
-import { getCountryByCode, allCountries } from './data/countries';
-import { getStatusMeta, ORDER_STATUS_LIST, ORDER_STATUSES } from './utils/orderStatus';
+import { getStatusMeta, ORDER_STATUS_LIST } from './utils/orderStatus';
 import { 
   auth, 
-  setUpRecaptcha, 
-  sendFirebasePhoneOtp, 
-  verifyFirebasePhoneOtp, 
+  signInWithGoogle,
+  signInWithGoogleRedirect,
+  checkRedirectAuthResult,
   signOutUser,
   saveCustomerToFirestore,
   deleteCustomerFromFirestore,
   subscribeToCustomerRecords,
   syncAllCustomersToFirestore,
-  testFirebaseConnection
+  testFirebaseConnection,
+  saveUserProfileToFirestore,
+  getUserProfileFromFirestore
 } from './firebase';
-import { onAuthStateChanged, User, ConfirmationResult } from 'firebase/auth';
+import { onAuthStateChanged, User } from 'firebase/auth';
 import { 
   Scissors, 
   Search, 
@@ -48,19 +47,18 @@ import {
   Sparkles,
   Lock,
   FileText,
-  KeyRound,
-  ArrowRight,
   RotateCw,
   CheckCircle2,
   AlertCircle,
   Smartphone,
   ChevronDown,
   MessageCircle,
+  ExternalLink,
+  LogIn,
   Clock,
   Filter,
   Cloud,
   RefreshCw,
-  AlertTriangle,
   Zap
 } from 'lucide-react';
 import { isDeliveryToday, isDeliveryLate, getDeliveryStatus } from './utils/deliveryDate';
@@ -68,20 +66,13 @@ import { isDeliveryToday, isDeliveryLate, getDeliveryStatus } from './utils/deli
 export default function AzadMasterFinalApp() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  
-  // Phone / OTP Authentication States
-  const [loginStep, setLoginStep] = useState<'phone' | 'otp'>('phone');
-  const [selectedCountryCode, setSelectedCountryCode] = useState('+92');
-  const [showCountryModal, setShowCountryModal] = useState(false);
-  const [phoneNumber, setPhoneNumber] = useState('3002073445');
-  const [otpCode, setOtpCode] = useState('123456');
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
-  const [isLoadingAuth, setIsLoadingAuth] = useState(false);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [authInfo, setAuthInfo] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(0);
 
-  const [currentLang, setCurrentLang] = useState<SupportedLanguage>('ur');
+  const [currentLang, setCurrentLang] = useState<SupportedLanguage>(() => {
+    const saved = localStorage.getItem('azad_master_f22_lang') as SupportedLanguage;
+    return (saved && translations[saved]) ? saved : 'ur';
+  });
   
   // Cloud Auto-Save States (Firebase Database)
   const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'online'>('online');
@@ -95,7 +86,7 @@ export default function AzadMasterFinalApp() {
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<'all' | OrderStatus>('all');
   const [selectedDeliveryFilter, setSelectedDeliveryFilter] = useState<'all' | 'today' | 'late'>('all');
   
-  // Search history state with requested defaults
+  // Search history state
   const [searchHistory, setSearchHistory] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('azad_master_search_history');
@@ -104,7 +95,7 @@ export default function AzadMasterFinalApp() {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch {}
-    return ['Peer Bakhash', 'Aslam'];
+    return [];
   });
 
   const handleSetSearch = (name: string) => {
@@ -177,123 +168,118 @@ export default function AzadMasterFinalApp() {
   const [showChatbot, setShowChatbot] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
 
-  // Master profile
-  const [masterName, setMasterName] = useState('Pir Bakhash (Master)');
-  const [inputMasterName, setInputMasterName] = useState('Pir Bakhash');
+  // Master profile (per user, not hardcoded)
+  const [masterName, setMasterName] = useState('');
+  const [masterPhone, setMasterPhone] = useState('');
   const [masterPhoto, setMasterPhoto] = useState<string | null>(null);
 
   const t = translations[currentLang] || translations.ur;
   const isRtl = ['ur', 'ar', 'fa', 'sd', 'ps'].includes(currentLang);
 
-  // Listen to Firebase Auth state
+  // Listen to Firebase Auth state as the ONLY source of truth
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    let unsubscribeFirestore: (() => void) | null = null;
+
+    // Check if user returned from a redirect sign-in
+    checkRedirectAuthResult().catch((err) => {
+      console.warn("Redirect check:", err);
+    });
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setCurrentUser(user);
         setIsLoggedIn(true);
-        localStorage.setItem('azad_master_f22_loggedin', 'true');
-      } else {
-        setCurrentUser(null);
-        const localStatus = localStorage.getItem('azad_master_f22_loggedin');
-        if (localStatus === 'true') {
-          setIsLoggedIn(true);
-        } else {
-          setIsLoggedIn(false);
-        }
-      }
-    });
+        setIsLoadingAuth(false);
+        setAuthError(null);
 
-    return () => unsubscribe();
-  }, []);
-
-  // Countdown timer for OTP Resend
-  useEffect(() => {
-    let timer: any;
-    if (countdown > 0) {
-      timer = setTimeout(() => setCountdown(c => c - 1), 1000);
-    }
-    return () => clearTimeout(timer);
-  }, [countdown]);
-
-  // Load from local storage
-  useEffect(() => {
-    const saved = localStorage.getItem('azad_master_final_v22');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setCustomers(parsed);
-        } else {
-          setCustomers(initialCustomers);
-          localStorage.setItem('azad_master_final_v22', JSON.stringify(initialCustomers));
-        }
-      } catch {
-        setCustomers(initialCustomers);
-      }
-    } else {
-      setCustomers(initialCustomers);
-      localStorage.setItem('azad_master_final_v22', JSON.stringify(initialCustomers));
-    }
-
-    const savedName = localStorage.getItem('azad_master_f22_name');
-    if (savedName) {
-      setMasterName(savedName);
-      setInputMasterName(savedName);
-    }
-
-    const savedPhoto = localStorage.getItem('azad_master_f22_photo');
-    if (savedPhoto) setMasterPhoto(savedPhoto);
-
-    const savedLang = localStorage.getItem('azad_master_f22_lang') as SupportedLanguage;
-    if (savedLang && translations[savedLang]) setCurrentLang(savedLang);
-
-    // Test Firebase Cloud Connection & Subscribe to real-time Firestore sync
-    testFirebaseConnection().then((connected) => {
-      if (connected) {
-        setCloudSyncStatus('synced');
-      }
-    });
-
-    const unsubscribe = subscribeToCustomerRecords((cloudCustomers) => {
-      if (cloudCustomers && cloudCustomers.length > 0) {
-        setCloudRecordCount(cloudCustomers.length);
-        setCloudSyncStatus('synced');
-        setLastCloudSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-        setCustomers((prev) => {
-          // Merge preserving any latest local changes
-          const existingIds = new Set(cloudCustomers.map(c => c.id));
-          const localOnly = prev.filter(c => !existingIds.has(c.id));
-          const merged = [...cloudCustomers, ...localOnly];
-          localStorage.setItem('azad_master_final_v22', JSON.stringify(merged));
-          return merged;
-        });
-      } else {
-        // If Firestore collection is empty on first boot, auto-upload current records to Firebase Cloud
-        const currentSaved = localStorage.getItem('azad_master_final_v22');
-        if (currentSaved) {
-          try {
-            const parsedList: Customer[] = JSON.parse(currentSaved);
-            if (Array.isArray(parsedList) && parsedList.length > 0) {
-              setCloudSyncStatus('syncing');
-              syncAllCustomersToFirestore(parsedList).then((res) => {
-                if (res.success) {
-                  setCloudRecordCount(res.count);
-                  setCloudSyncStatus('synced');
-                  setLastCloudSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-                }
+        // 1. Load user-specific profile
+        try {
+          const cloudProfile = await getUserProfileFromFirestore(user.uid);
+          if (cloudProfile && cloudProfile.name) {
+            setMasterName(cloudProfile.name);
+            setMasterPhoto(cloudProfile.photo || user.photoURL || null);
+            setMasterPhone(cloudProfile.phone || '');
+          } else {
+            // Check local storage keyed to this user's UID
+            const localProfile = localStorage.getItem(`azad_master_profile_${user.uid}`);
+            if (localProfile) {
+              const parsed = JSON.parse(localProfile);
+              setMasterName(parsed.name || user.displayName || 'Master Tailor');
+              setMasterPhoto(parsed.photo || user.photoURL || null);
+              setMasterPhone(parsed.phone || '');
+            } else {
+              const initialName = user.displayName || 'Master Tailor';
+              setMasterName(initialName);
+              setMasterPhoto(user.photoURL || null);
+              setMasterPhone('');
+              // Initialize empty profile in Firestore
+              saveUserProfileToFirestore({
+                name: initialName,
+                photo: user.photoURL || null,
+                phone: ''
               });
             }
-          } catch {}
+          }
+        } catch (err) {
+          console.warn("Could not load user profile:", err);
+          setMasterName(user.displayName || 'Master Tailor');
+          setMasterPhoto(user.photoURL || null);
         }
+
+        // 2. Load cached customers for this specific user
+        const localCacheKey = `azad_master_customers_${user.uid}`;
+        const cached = localStorage.getItem(localCacheKey);
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed)) {
+              setCustomers(parsed);
+              setCloudRecordCount(parsed.length);
+            }
+          } catch {}
+        } else {
+          setCustomers([]);
+          setCloudRecordCount(0);
+        }
+
+        // 3. Subscribe to real-time customer records for this user (where ownerId == uid)
+        setCloudSyncStatus('syncing');
+        if (unsubscribeFirestore) unsubscribeFirestore();
+        unsubscribeFirestore = subscribeToCustomerRecords((cloudCustomers) => {
+          setCustomers(cloudCustomers);
+          setCloudRecordCount(cloudCustomers.length);
+          setCloudSyncStatus('synced');
+          setLastCloudSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          try {
+            localStorage.setItem(localCacheKey, JSON.stringify(cloudCustomers));
+          } catch {}
+        });
+
+      } else {
+        // User is logged out
+        if (unsubscribeFirestore) {
+          unsubscribeFirestore();
+          unsubscribeFirestore = null;
+        }
+        setCurrentUser(null);
+        setIsLoggedIn(false);
+        setIsLoadingAuth(false);
+        setCustomers([]);
+        setMasterName('');
+        setMasterPhoto(null);
+        setMasterPhone('');
+        setCloudRecordCount(0);
       }
     });
 
     return () => {
-      unsubscribe();
+      unsubscribeAuth();
+      if (unsubscribeFirestore) unsubscribeFirestore();
     };
   }, []);
 
   const handleManualCloudSync = async () => {
+    if (!currentUser) return { success: false, count: 0 };
     setCloudSyncStatus('syncing');
     try {
       const res = await syncAllCustomersToFirestore(customers);
@@ -370,46 +356,44 @@ export default function AzadMasterFinalApp() {
     }
   };
 
-  // Handle Direct Unified Login
-  const handleUnifiedLogin = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  // Real Google Sign-in Handler
+  const handleGoogleLogin = async () => {
     setAuthError(null);
-    setAuthInfo(null);
-
-    const cleanName = inputMasterName.trim();
-    if (!cleanName) {
-      setAuthError(isRtl ? 'براہ کرم اپنا نام درج کریں۔' : 'Please enter your name.');
-      return;
-    }
-
-    const cleanNum = phoneNumber.replace(/\D/g, '');
-    if (!cleanNum || cleanNum.length < 5) {
-      setAuthError(isRtl ? 'براہ کرم درست موبائل نمبر درج کریں۔' : 'Please enter a valid mobile phone number.');
-      return;
-    }
-
-    const cleanOtp = otpCode.trim();
-    if (!cleanOtp) {
-      setAuthError(isRtl ? 'براہ کرم OTP / PIN کوڈ درج کریں۔' : 'Please enter OTP / PIN code.');
-      return;
-    }
-
     setIsLoadingAuth(true);
-
     try {
-      // Check test pin or verify firebase
-      if (cleanOtp === '123456' || cleanOtp === '1234' || cleanOtp.length >= 4) {
-        setMasterName(cleanName);
-        localStorage.setItem('azad_master_f22_name', cleanName);
-        localStorage.setItem('azadMasterUser', JSON.stringify({ name: cleanName, phone: cleanNum, countryCode: selectedCountryCode, loggedIn: true }));
-        localStorage.setItem('azad_master_f22_loggedin', 'true');
-        setIsLoggedIn(true);
-      } else {
-        setAuthError(isRtl ? 'غلط کوڈ! براہ کرم 123456 درج کریں۔' : 'Invalid code! Please enter 123456.');
-      }
+      await signInWithGoogle();
+      // onAuthStateChanged will handle setting the state and user
     } catch (err: any) {
-      setAuthError(err?.message || (isRtl ? 'لاگ ان کرنے میں مسئلہ آیا ہے۔' : 'Failed to log in.'));
-    } finally {
+      console.error("Google Sign-In Error:", err);
+      let msg = isRtl ? 'گوگل لاگ ان میں خرابی آئی۔ براہ کرم دوبارہ کوشش کریں۔' : 'Google sign-in failed. Please try again.';
+      if (err?.code === 'auth/network-request-failed') {
+        msg = isRtl 
+          ? 'نیٹ ورک یا آئی فریم رکاوٹ (auth/network-request-failed)۔ براہ کرم نیچے "نئی ٹیب میں کھولیں" بٹن پر کلک کریں یا ری ڈائریکٹ لاگ ان کریں۔'
+          : 'Network / iframe restriction (auth/network-request-failed). Please click "Open in New Tab" below or use Redirect Sign-in.';
+      } else if (err?.code === 'auth/popup-closed-by-user') {
+        msg = isRtl ? 'لاگ ان پاپ اپ بند کر دیا گیا۔ دوبارہ کوشش کریں۔' : 'Sign-in popup was closed. Please try again.';
+      } else if (err?.code === 'auth/cancelled-popup-request') {
+        msg = isRtl ? 'لاگ ان درخواست منسوخ ہو گئی۔' : 'Sign-in request was cancelled.';
+      } else if (err?.code === 'auth/unauthorized-domain') {
+        msg = isRtl 
+          ? 'یہ ڈومین Firebase Console میں مجاز نہیں ہے۔ براہ کرم Authorized Domains میں شامل کریں۔' 
+          : 'This domain is not authorized in Firebase Console. Please add it to Authorized Domains.';
+      } else if (err?.message) {
+        msg = err.message;
+      }
+      setAuthError(msg);
+      setIsLoadingAuth(false);
+    }
+  };
+
+  const handleGoogleRedirectLogin = async () => {
+    setAuthError(null);
+    setIsLoadingAuth(true);
+    try {
+      await signInWithGoogleRedirect();
+    } catch (err: any) {
+      console.error("Google Redirect Error:", err);
+      setAuthError(err?.message || (isRtl ? 'ری ڈائریکٹ لاگ ان میں مسئلہ آیا ہے۔' : 'Redirect sign-in failed.'));
       setIsLoadingAuth(false);
     }
   };
@@ -422,14 +406,16 @@ export default function AzadMasterFinalApp() {
     }
     setIsLoggedIn(false);
     setCurrentUser(null);
-    localStorage.removeItem('azad_master_f22_loggedin');
-    localStorage.removeItem('azadMasterUser');
+    setCustomers([]);
+    setMasterName('');
+    setMasterPhoto(null);
+    setMasterPhone('');
     setShowSideMenu(false);
-    setLoginStep('phone');
     setAuthError(null);
   };
 
   const handleSaveCustomer = (customerData: Partial<Customer>) => {
+    if (!currentUser) return;
     let updated: Customer[];
     let savedObj: Customer;
     
@@ -444,8 +430,8 @@ export default function AzadMasterFinalApp() {
       // New customer
       savedObj = {
         id: Date.now(),
-        name: customerData.name || 'Unnamed',
-        phone: customerData.phone || 'No phone number',
+        name: customerData.name || '',
+        phone: customerData.phone || '',
         details: customerData.details || '',
         measurementsObj: customerData.measurementsObj,
         imageUri: customerData.imageUri || null,
@@ -460,13 +446,15 @@ export default function AzadMasterFinalApp() {
     }
 
     setCustomers(updated);
-    localStorage.setItem('azad_master_final_v22', JSON.stringify(updated));
-    // Background cloud Firestore sync with accounts data
+    try {
+      localStorage.setItem(`azad_master_customers_${currentUser.uid}`, JSON.stringify(updated));
+    } catch {}
+
     setCloudSyncStatus('syncing');
     saveCustomerToFirestore(savedObj).then((res) => {
       if (res.success) {
         setCloudSyncStatus('synced');
-        setCloudRecordCount((prev) => Math.max(prev, updated.length));
+        setCloudRecordCount(updated.length);
         setLastCloudSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       } else {
         setCloudSyncStatus('error');
@@ -479,6 +467,7 @@ export default function AzadMasterFinalApp() {
 
   const handleUpdateStatus = (id: number, status: OrderStatus, e?: React.MouseEvent | React.ChangeEvent<HTMLSelectElement>) => {
     if (e && 'stopPropagation' in e) e.stopPropagation();
+    if (!currentUser) return;
     
     const existing = customers.find(c => c.id === id);
     if (existing && existing.status === 'delivered' && status !== 'delivered') {
@@ -507,7 +496,9 @@ export default function AzadMasterFinalApp() {
       return c;
     });
     setCustomers(updated);
-    localStorage.setItem('azad_master_final_v22', JSON.stringify(updated));
+    try {
+      localStorage.setItem(`azad_master_customers_${currentUser.uid}`, JSON.stringify(updated));
+    } catch {}
     if (activeSlip && activeSlip.id === id) {
       setActiveSlip({ ...activeSlip, status });
     }
@@ -515,16 +506,19 @@ export default function AzadMasterFinalApp() {
 
   const handleDelete = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!currentUser) return;
     const confirmMsg = isRtl ? 'کیا آپ اس کٹنگ سلپ کو حذف کرنا چاہتے ہیں؟' : 'Delete this slip?';
     if (window.confirm(confirmMsg)) {
       const filtered = customers.filter((item) => item.id !== id);
       setCustomers(filtered);
-      localStorage.setItem('azad_master_final_v22', JSON.stringify(filtered));
+      try {
+        localStorage.setItem(`azad_master_customers_${currentUser.uid}`, JSON.stringify(filtered));
+      } catch {}
       setCloudSyncStatus('syncing');
       deleteCustomerFromFirestore(id).then((res) => {
         if (res.success) {
           setCloudSyncStatus('synced');
-          setCloudRecordCount((prev) => Math.max(0, prev - 1));
+          setCloudRecordCount(filtered.length);
           setLastCloudSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
         }
       });
@@ -535,19 +529,21 @@ export default function AzadMasterFinalApp() {
   const handleUpdateProfile = (name: string, photo: string | null) => {
     setMasterName(name);
     setMasterPhoto(photo);
-    localStorage.setItem('azad_master_f22_name', name);
-    if (photo) {
-      localStorage.setItem('azad_master_f22_photo', photo);
-    } else {
-      localStorage.removeItem('azad_master_f22_photo');
+    if (currentUser) {
+      const payload = { name, photo, phone: masterPhone };
+      try {
+        localStorage.setItem(`azad_master_profile_${currentUser.uid}`, JSON.stringify(payload));
+      } catch {}
+      saveUserProfileToFirestore(payload);
     }
   };
 
   const handleImportCustomers = (imported: Customer[]) => {
-    if (!Array.isArray(imported)) return;
+    if (!Array.isArray(imported) || !currentUser) return;
     setCustomers(imported);
-    localStorage.setItem('azad_master_final_v22', JSON.stringify(imported));
-    // Sync restored records to Firestore cloud database
+    try {
+      localStorage.setItem(`azad_master_customers_${currentUser.uid}`, JSON.stringify(imported));
+    } catch {}
     setCloudSyncStatus('syncing');
     syncAllCustomersToFirestore(imported).then((res) => {
       if (res.success) {
@@ -558,10 +554,21 @@ export default function AzadMasterFinalApp() {
     });
   };
 
-  const handleClearAllData = () => {
-    setCustomers([]);
-    localStorage.removeItem('azad_master_final_v22');
-    setActiveSlip(null);
+  const handleClearAllData = async () => {
+    if (!currentUser) return;
+    const confirmMsg = isRtl 
+      ? 'کیا آپ واقعی اپنے تمام کسٹمر ریکارڈز حذف کرنا چاہتے ہیں؟' 
+      : 'Are you sure you want to delete all your customer records?';
+    if (window.confirm(confirmMsg)) {
+      for (const c of customers) {
+        await deleteCustomerFromFirestore(c.id);
+      }
+      setCustomers([]);
+      try {
+        localStorage.removeItem(`azad_master_customers_${currentUser.uid}`);
+      } catch {}
+      setActiveSlip(null);
+    }
   };
 
   const handleApplyMeasurementsFromAI = (measurements: Partial<CustomerMeasurements>) => {
@@ -616,7 +623,7 @@ export default function AzadMasterFinalApp() {
     return matchesSearch && matchesStatus && matchesDelivery;
   });
 
-  // 1. Production-Ready Unified Login View
+  // 1. Production-Ready Secure Google Auth Login View
   if (!isLoggedIn) {
     return (
       <div 
@@ -639,9 +646,9 @@ export default function AzadMasterFinalApp() {
           />
         </div>
 
-        {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} duration={3200} />}
+        {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} duration={2800} />}
 
-        <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative z-10 overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-[#128c7e]/20">
+        <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 sm:p-7 relative z-10 overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-[#128c7e]/20">
           
           {/* App Logo & Title */}
           <div className="text-center mb-6">
@@ -657,120 +664,97 @@ export default function AzadMasterFinalApp() {
             <h1 className="text-2xl font-black text-slate-800 tracking-wide">
               {isRtl ? 'آزاد ماسٹر' : 'Azad Master'}
             </h1>
-            <p className="text-xs text-[#54656f] mt-0.5 font-medium">
-              {isRtl ? 'ماسٹر ٹیلرنگ ڈیجیٹل لاگ ان' : 'Master Tailoring Digital Login'}
+            <p className="text-xs text-[#075e54] mt-0.5 font-bold">
+              {isRtl ? 'درزی ماسٹر ڈیجیٹل کلاؤڈ رجسٹر' : 'Professional Tailor Digital Cloud Register'}
             </p>
           </div>
 
-          {/* Error Message Display */}
+          {/* Privacy & Multi-User Notice */}
+          <div className="mb-5 p-3.5 bg-[#f0faf4] border border-[#128c7e]/25 rounded-xl text-slate-700 text-xs text-left rtl:text-right space-y-1.5 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-bold text-[#075e54]">
+              <ShieldCheck className="w-4 h-4 shrink-0 text-[#25d366]" />
+              <span>{isRtl ? '100% محفوظ اور ذاتی ریکارڈ' : '100% Secure & Private Records'}</span>
+            </div>
+            <p className="text-[11.5px] leading-relaxed text-slate-600">
+              {isRtl 
+                ? 'ہر درزی اپنے گوگل اکاؤنٹ کے ذریعے محفوظ لاگ ان کرے گا۔ آپ کے کسٹمرز، ناپ اور کھاتہ صرف آپ کو ہی نظر آئیں گے۔' 
+                : 'Each tailor securely signs in with their Google account. Your customers, measurements, and accounts remain strictly private to you.'}
+            </p>
+          </div>
+
+          {/* Error Message Display with Recovery Actions */}
           {authError && (
-            <div className="mb-4 p-3 bg-rose-100 border border-rose-300 rounded-xl text-rose-800 text-xs flex items-start gap-2 text-left rtl:text-right">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
-              <div className="flex-1">
-                <span>{authError}</span>
+            <div className="mb-4 p-3 bg-rose-50 border border-rose-300 rounded-xl text-rose-800 text-xs flex flex-col gap-2.5 text-left rtl:text-right animate-in fade-in">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+                <div className="flex-1 font-medium leading-relaxed">
+                  <span>{authError}</span>
+                </div>
+              </div>
+              
+              {/* Recovery Actions for iframe / network block */}
+              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-rose-200/80">
+                <a 
+                  href={window.location.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2.5 py-1.5 bg-white hover:bg-rose-100 text-[#075e54] font-bold rounded-lg border border-slate-300 text-[11px] flex items-center gap-1 shadow-2xs transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3 text-[#25d366]" />
+                  <span>{isRtl ? 'نئی ٹیب میں ایپ کھولیں' : 'Open in New Tab'}</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={handleGoogleRedirectLogin}
+                  disabled={isLoadingAuth}
+                  className="px-2.5 py-1.5 bg-[#075e54] hover:bg-[#064e46] text-white font-bold rounded-lg text-[11px] flex items-center gap-1 shadow-2xs transition-colors"
+                >
+                  <LogIn className="w-3 h-3 text-amber-300" />
+                  <span>{isRtl ? 'ری ڈائریکٹ لاگ ان آزمائیں' : 'Try Redirect Login'}</span>
+                </button>
               </div>
             </div>
           )}
 
-          {/* Login Form */}
-          <form id="loginForm" onSubmit={handleUnifiedLogin} className="space-y-4">
-            
-            {/* Name Field */}
-            <div className="text-left rtl:text-right">
-              <label htmlFor="userName" className="block text-xs font-semibold text-slate-600 mb-1">
-                {isRtl ? 'اپنا نام درج کریں' : 'Enter Your Name'}
-              </label>
-              <input 
-                type="text" 
-                id="userName" 
-                required 
-                placeholder={isRtl ? 'مثلاً: پیر بخش' : 'e.g. Pir Bakhash'} 
-                value={inputMasterName}
-                onChange={(e) => setInputMasterName(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#128c7e] focus:ring-2 focus:ring-[#128c7e]/20 outline-none text-slate-800 text-sm transition-all"
-              />
-            </div>
+          {/* Real Google Sign-in Button */}
+          <button 
+            type="button" 
+            id="google-signin-btn"
+            onClick={handleGoogleLogin}
+            disabled={isLoadingAuth}
+            className="w-full bg-white hover:bg-slate-50 active:scale-[0.99] text-slate-800 font-bold py-3.5 px-4 rounded-xl border border-slate-300 shadow-sm hover:shadow-md transition-all text-sm flex items-center justify-center gap-3 cursor-pointer select-none"
+          >
+            {isLoadingAuth ? (
+              <>
+                <RotateCw className="w-4 h-4 animate-spin text-[#075e54]" />
+                <span>{isRtl ? 'لاگ ان ہو رہا ہے...' : 'Signing in...'}</span>
+              </>
+            ) : (
+              <>
+                {/* Official Google 'G' Icon */}
+                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                </svg>
+                <span>{isRtl ? 'گوگل اکاؤنٹ سے لاگ ان کریں' : 'Sign in with Google'}</span>
+              </>
+            )}
+          </button>
 
-            {/* Mobile Number Field with Country Selector Button */}
-            <div className="text-left rtl:text-right">
-              <div className="flex items-center justify-between mb-1">
-                <label htmlFor="userPhone" className="block text-xs font-semibold text-slate-600">
-                  {isRtl ? 'موبائل نمبر' : 'Mobile Number'}
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setShowCountryModal(true)}
-                  className="text-[11px] text-[#075e54] hover:text-[#054c44] font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
-                >
-                  <span>{isRtl ? 'ملک تبدیل کریں' : 'Change Country'}</span>
-                </button>
-              </div>
-
-              <div className="flex gap-2" dir="ltr">
-                <button
-                  type="button"
-                  id="selectedCountryBtn"
-                  onClick={() => setShowCountryModal(true)}
-                  className="px-3 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-sm outline-none flex items-center gap-1 shrink-0 hover:bg-slate-100 cursor-pointer transition-colors"
-                  title={getCountryByCode(selectedCountryCode).name}
-                >
-                  <span>{getCountryByCode(selectedCountryCode).flag} {selectedCountryCode}</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/>
-                  </svg>
-                </button>
-
-                <input 
-                  type="tel" 
-                  id="userPhone" 
-                  required 
-                  placeholder="3002073445" 
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#128c7e] focus:ring-2 focus:ring-[#128c7e]/20 outline-none text-slate-800 text-sm font-mono transition-all"
-                />
-              </div>
-            </div>
-
-            {/* OTP / Password Field */}
-            <div className="text-left rtl:text-right">
-              <div className="flex justify-between items-center mb-1">
-                <label htmlFor="otpCode" className="block text-xs font-semibold text-slate-600">
-                  {isRtl ? 'پن / کوڈ درج کریں' : 'Enter PIN / Code'}
-                </label>
-                <span className="text-[10px] text-[#075e54] font-medium">
-                  {isRtl ? 'ٹیسٹ کوڈ: 123456' : 'Test Code: 123456'}
-                </span>
-              </div>
-              <input 
-                type="password" 
-                id="otpCode" 
-                required 
-                maxLength={6} 
-                placeholder="******" 
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#128c7e] focus:ring-2 focus:ring-[#128c7e]/20 outline-none text-slate-800 text-sm tracking-widest font-bold font-mono transition-all"
-              />
-            </div>
-
-            {/* Submit Button */}
-            <button 
-              type="submit" 
-              id="submit-login-btn"
-              disabled={isLoadingAuth}
-              className="w-full bg-[#075e54] hover:bg-[#054c44] active:scale-[0.99] text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-[#075e54]/20 transition-all text-sm mt-2 cursor-pointer flex items-center justify-center gap-2"
+          {/* Quick Helper for iframe / direct access */}
+          <div className="mt-3 text-center">
+            <a 
+              href={window.location.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-[#075e54] hover:text-[#128c7e] hover:underline"
             >
-              {isLoadingAuth ? (
-                <>
-                  <RotateCw className="w-4 h-4 animate-spin" />
-                  <span>{isRtl ? 'تصدیق ہو رہی ہے...' : 'Verifying...'}</span>
-                </>
-              ) : (
-                <span>{isRtl ? 'تصدیق اور لاگ ان کریں' : 'Verify & Login'}</span>
-              )}
-            </button>
-          </form>
+              <ExternalLink className="w-3 h-3" />
+              <span>{isRtl ? 'براہ راست نئی ونڈو میں کھولیں' : 'Open directly in new window'}</span>
+            </a>
+          </div>
 
           {/* Footer Language Selector */}
           <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
@@ -793,37 +777,11 @@ export default function AzadMasterFinalApp() {
           </div>
 
         </div>
-
-        {/* Searchable International Country Selector Modal */}
-        <CountrySelectorModal
-          isOpen={showCountryModal}
-          onClose={() => setShowCountryModal(false)}
-          selectedCode={selectedCountryCode}
-          onSelect={(c) => {
-            setSelectedCountryCode(c.code);
-          }}
-          isRtl={isRtl}
-        />
       </div>
     );
   }
 
-  const getPhoneDisplay = (rawPhone: string) => {
-    if (!rawPhone) return { flag: '🇵🇰', code: '+92', number: '' };
-    const str = rawPhone.trim();
-    if (str.startsWith('+')) {
-      const matched = allCountries.find(c => str.startsWith(c.code));
-      if (matched) {
-        const remaining = str.slice(matched.code.length).trim();
-        return { flag: matched.flag, code: matched.code, number: remaining };
-      }
-      const parts = str.split(' ');
-      return { flag: '🌍', code: parts[0], number: parts.slice(1).join(' ') };
-    }
-    return { flag: '🇵🇰', code: '+92', number: str };
-  };
-
-  // 2. Main App View
+  // 2. Main App View (Tailor is logged in)
   return (
     <div 
       dir={isRtl ? 'rtl' : 'ltr'} 
@@ -844,8 +802,6 @@ export default function AzadMasterFinalApp() {
           }}
         />
       </div>
-
-      {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} duration={3200} />}
 
       <div className="w-full max-w-md bg-white rounded-none sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col h-screen sm:h-[90vh] relative z-10 border border-[#128c7e]/20">
         
@@ -909,8 +865,8 @@ export default function AzadMasterFinalApp() {
             onLogout={handleLogout}
             currentLang={currentLang}
             onChangeLanguage={changeLanguage}
-            masterName={masterName}
-            userPhone={currentUser?.phoneNumber || undefined}
+            masterName={masterName || currentUser?.displayName || 'Master Tailor'}
+            userPhone={masterPhone || currentUser?.phoneNumber || undefined}
             isRtl={isRtl}
           />
         </header>
@@ -1001,34 +957,29 @@ export default function AzadMasterFinalApp() {
                   </span>
                 </button>
 
-                {/* Status Specific Filters */}
-                {ORDER_STATUS_LIST.map((st) => {
-                  const meta = ORDER_STATUSES[st];
-                  const count = statusCounts[st];
-                  const isSelected = selectedStatusFilter === st;
-
+                {/* Status Chips */}
+                {ORDER_STATUS_LIST.map((stKey) => {
+                  const meta = getStatusMeta(stKey);
+                  const isSelected = selectedStatusFilter === stKey && selectedDeliveryFilter === 'all';
+                  const count = statusCounts[stKey] || 0;
                   return (
                     <button
-                      key={st}
-                      id={`filter-status-${st}`}
+                      key={stKey}
+                      id={`filter-status-${stKey}`}
                       type="button"
                       onClick={() => {
-                        setSelectedStatusFilter(st);
+                        setSelectedStatusFilter(stKey);
+                        setSelectedDeliveryFilter('all');
                       }}
                       className={`h-7 sm:h-7.5 px-2.5 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer border flex items-center gap-1 shrink-0 active:scale-95 ${
                         isSelected
-                          ? 'bg-[#075e54] text-white border-[#075e54] shadow-xs ring-1 ring-[#128c7e]/30'
-                          : 'bg-white text-slate-800 border-slate-300 hover:bg-[#e7f7ef] hover:border-[#128c7e]/30'
+                          ? `${meta.badgeClass} ring-1 ring-black/20 shadow-xs scale-102`
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                       }`}
                     >
-                      <span>{meta.icon}</span>
-                      <span>{isRtl ? meta.shortUrdu : meta.labelEn}</span>
-                      <span className={`px-1.5 py-0.2 rounded-full text-[9.5px] font-black ${
-                        isSelected
-                          ? 'bg-white/25 text-white'
-                          : count > 0 
-                          ? 'bg-[#e7f7ef] text-[#075e54] font-bold'
-                          : 'bg-slate-200 text-slate-600'
+                      <span>{meta.icon} {isRtl ? meta.labelUrdu : meta.labelEn}</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
+                        isSelected ? 'bg-black/15 text-inherit' : 'bg-slate-100 text-slate-600'
                       }`}>
                         {count}
                       </span>
@@ -1037,265 +988,179 @@ export default function AzadMasterFinalApp() {
                 })}
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Scrollable Customer List Area - Slim compact cards so 3-4 cards are visible at once */}
-        <div 
-          id="scrollable-customers-container" 
-          className="p-2.5 sm:p-3 overflow-y-auto space-y-2 flex-1 pb-24 bg-[#f0f2f5]"
-        >
-          {/* Recent Orders Quick-View (Clean collapsible drawer/toggle for quick access) */}
-          <RecentOrdersQuickView 
-            customers={customers}
-            onOpenSlip={(c) => setActiveSlip(c)}
-            onEditCustomer={(c) => {
-              setEditingCustomer(c);
-              setShowAddModal(true);
-            }}
-            isRtl={isRtl}
-          />
-
-          {/* Total Customers Label (Top of Scrollable Area) */}
-          <div className="flex justify-between items-center text-xs font-bold text-[#64748b] px-0.5">
-            <span className="flex items-center gap-1.5 flex-wrap">
-              <span>{isRtl ? `کل گاہک: ${filteredList.length}` : `Total Customers: ${filteredList.length}`}</span>
-              {selectedDeliveryFilter === 'today' && (
-                <span className="text-amber-900 bg-amber-100 border border-amber-300 text-[10px] px-1.5 py-0.2 rounded-full font-bold inline-flex items-center gap-0.5">
-                  ⚡ {isRtl ? 'صرف آج کی ڈیلیوری' : "Today's Delivery Only"}
-                </span>
-              )}
-              {selectedDeliveryFilter === 'late' && (
-                <span className="text-rose-900 bg-rose-100 border border-rose-300 text-[10px] px-1.5 py-0.2 rounded-full font-bold inline-flex items-center gap-0.5">
-                  ⚠️ {isRtl ? 'صرف تاخیر شدہ آرڈرز' : 'Late Orders Only'}
-                </span>
-              )}
-            </span>
-            {(selectedStatusFilter !== 'all' || selectedDeliveryFilter !== 'all') && (
-              <span 
-                className="text-[11px] text-[#0d4a2a] font-bold cursor-pointer hover:underline bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded transition-colors" 
-                onClick={() => {
-                  setSelectedStatusFilter('all');
-                  setSelectedDeliveryFilter('all');
-                }}
-              >
-                ✕ {isRtl ? 'تمام دکھائیں' : 'Show All'}
-              </span>
-            )}
-          </div>
-
-          {/* Customer Cards List */}
-          {filteredList.length === 0 ? (
-            <div className="text-center py-10 px-4 space-y-2.5">
-              <div className="w-14 h-14 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto">
-                <Scissors className="w-7 h-7" />
-              </div>
-              <p className="text-sm font-semibold text-slate-600">{t.noRecords}</p>
-              <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
-                {t.tapToAdd}
-              </p>
+            {/* Quick Action Buttons Row: Add Measurement & Paper Slip Camera Scan */}
+            <div className="grid grid-cols-2 gap-2 pt-0.5">
               <button
-                id="empty-state-add-btn"
+                id="btn-quick-add-slip"
+                type="button"
                 onClick={() => {
                   setEditingCustomer(null);
                   setShowAddModal(true);
                 }}
-                className="inline-flex items-center gap-1.5 bg-[#075e54] hover:bg-[#054c44] text-white text-xs font-bold py-2 px-3.5 rounded-xl shadow-xs transition-colors cursor-pointer"
+                className="py-2 px-3 bg-[#075e54] hover:bg-[#054c44] active:scale-[0.98] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
               >
-                <Plus className="w-4 h-4" />
-                <span>{t.addSlip}</span>
+                <span className="text-sm font-black">+</span>
+                <span>{isRtl ? 'نیا ناپ درج کریں' : 'Add Measurement'}</span>
+              </button>
+
+              <button
+                id="btn-quick-camera-slip"
+                type="button"
+                onClick={() => setShowImageSourceModal(true)}
+                className="py-2 px-3 bg-[#128c7e] hover:bg-[#0f766a] active:scale-[0.98] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              >
+                <span>📸</span>
+                <span>{isRtl ? 'پرچہ / کپڑا فوٹو' : 'Slip / Cloth Photo'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Scrollable Customer Slips List */}
+        <main 
+          id="scrollable-customers-container"
+          className="flex-1 overflow-y-auto p-2 sm:px-3 pb-24 bg-[#efeae2]/40"
+        >
+          {/* Quick Orders Carousel / Delivery status */}
+          <RecentOrdersQuickView
+            customers={customers}
+            onSelectOrder={(cust) => setActiveSlip(cust)}
+            isRtl={isRtl}
+          />
+
+          {/* List Count and Cloud Indicator Header */}
+          <div className="flex items-center justify-between px-1 py-1.5 text-xs text-[#54656f]">
+            <span className="font-bold flex items-center gap-1 text-slate-700">
+              <Scissors className="w-3.5 h-3.5 text-[#075e54]" />
+              <span>{isRtl ? 'گاہکوں کے ناپ رجسٹر:' : 'Customer Slips:'}</span>
+              <span className="text-[#075e54]">({filteredList.length})</span>
+            </span>
+
+            {/* Cloud Auto-Sync Indicator */}
+            <div className="flex items-center gap-1 text-[11px] font-medium">
+              {cloudSyncStatus === 'syncing' ? (
+                <span className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                  <RefreshCw className="w-3 h-3 animate-spin" />
+                  <span>{isRtl ? 'سنک ہو رہا ہے...' : 'Syncing...'}</span>
+                </span>
+              ) : cloudSyncStatus === 'synced' ? (
+                <span className="flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  <Cloud className="w-3 h-3 text-emerald-600" />
+                  <span>{isRtl ? 'کلاؤڈ محفوظ' : 'Cloud Synced'}</span>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleManualCloudSync}
+                  className="flex items-center gap-1 text-[#075e54] hover:underline cursor-pointer"
+                >
+                  <Cloud className="w-3 h-3" />
+                  <span>{isRtl ? 'سنک کریں' : 'Sync'}</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Customer Cards List */}
+          {filteredList.length === 0 ? (
+            <div className="text-center py-12 px-4 bg-white rounded-2xl border border-dashed border-slate-300 my-4 shadow-2xs">
+              <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-[#f0faf4] flex items-center justify-center text-2xl border border-[#128c7e]/20">
+                ✂️
+              </div>
+              <h3 className="font-bold text-slate-700 text-sm mb-1">
+                {searchQuery 
+                  ? (isRtl ? 'کوئی گاہک نہیں ملا' : 'No customer found')
+                  : (isRtl ? 'ابھی کوئی گاہک محفوظ نہیں ہے' : 'No customers saved yet')}
+              </h3>
+              <p className="text-xs text-slate-500 mb-4 max-w-xs mx-auto">
+                {searchQuery
+                  ? (isRtl ? 'مختلف نام یا فون نمبر سے تلاش کریں یا نیا ناپ شامل کریں۔' : 'Try searching with another name or phone.')
+                  : (isRtl ? 'نئے گاہک کا ناپ درج کرنے کے لیے نیچے بٹن دبائیں۔' : 'Add your first customer measurement record.')}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingCustomer(null);
+                  setShowAddModal(true);
+                }}
+                className="px-4 py-2 bg-[#075e54] text-white rounded-xl text-xs font-bold hover:bg-[#054c44] shadow-sm cursor-pointer"
+              >
+                + {isRtl ? 'پہلا ناپ درج کریں' : 'Add First Customer'}
               </button>
             </div>
           ) : (
-            filteredList.map((item) => {
-              const phoneInfo = getPhoneDisplay(item.phone);
-              const cleanPhone = item.phone.replace(/[^0-9]/g, '');
-              const itemStatus = item.status || 'pending';
-              const statusMeta = getStatusMeta(itemStatus);
+            <div className="space-y-2">
+              {filteredList.map((customer) => {
+                const statusMeta = getStatusMeta(customer.status || 'pending');
+                const isDelivToday = isDeliveryToday(customer.deliveryDate, customer.status);
+                const isDelivLate = isDeliveryLate(customer.deliveryDate, customer.status);
 
-              const generateWhatsAppUrl = (e: React.MouseEvent) => {
-                e.stopPropagation();
-                let msg = `✨ *آزاد ماسٹر - کٹنگ سلپ (AZAD MASTER)* ✨\n`;
-                msg += `━━━━━━━━━━━━━━━━━━━━\n`;
-                msg += `👤 *گاہک:* ${item.name}\n`;
-                msg += `📞 *فون:* ${item.phone}\n`;
-                msg += `📅 *تاریخ بکنگ:* ${item.date}\n`;
-                if (item.deliveryDate) {
-                  msg += `🚀 *تاریخ ڈیلیوری:* ${item.deliveryDate}\n`;
-                }
-                msg += `📌 *آرڈر کی حالت:* ${statusMeta.icon} ${statusMeta.labelUrdu} (${statusMeta.labelEn})\n`;
-                msg += `━━━━━━━━━━━━━━━━━━━━\n`;
-                msg += `✂️ *ناپ کی تفصیل (Measurements):*\n\n`;
-
-                if (item.measurementsObj && Object.keys(item.measurementsObj).length > 0) {
-                  const m = item.measurementsObj;
-                  if (m.length) msg += `▫️ لمبائی (Length): *${m.length}"*\n`;
-                  if (m.shoulder) msg += `▫️ تیرا (Shoulder): *${m.shoulder}"*\n`;
-                  if (m.sleeves) msg += `▫️ بازو (Sleeves): *${m.sleeves}"*\n`;
-                  if (m.chest) msg += `▫️ چھاتی (Chest): *${m.chest}"*\n`;
-                  if (m.waist) msg += `▫️ کمر (Waist): *${m.waist}"*\n`;
-                  if (m.daaman) msg += `▫️ دامن/گھیر (Daaman): *${m.daaman}"*\n`;
-                  if (m.collar) msg += `▫️ کالر/بین (Collar): *${m.collar}"*\n`;
-                  if (m.shalwar) msg += `▫️ شلوار (Shalwar): *${m.shalwar}"*\n`;
-                  if (m.pancha) msg += `▫️ پانچہ (Paancha): *${m.pancha}"*\n`;
-                } else {
-                  msg += `${item.details}\n`;
-                }
-
-                if (item.totalAmount !== undefined && item.totalAmount !== null && item.totalAmount !== '') {
-                  const tot = parseFloat(String(item.totalAmount)) || 0;
-                  const adv = parseFloat(String(item.advanceAmount || 0)) || 0;
-                  const bal = item.balanceAmount !== undefined && item.balanceAmount !== '' 
-                    ? item.balanceAmount 
-                    : Math.max(0, tot - adv);
-                  msg += `\n━━━━━━━━━━━━━━━━━━━━\n`;
-                  msg += `💰 *سلائی کھاتہ و بل تفصیل (Tailoring Bill):*\n`;
-                  msg += `💵 کل اجرت (Total Fee): *Rs. ${tot}*\n`;
-                  msg += `📥 پیشگی ایڈوانس (Advance): *Rs. ${adv}*\n`;
-                  if (Number(bal) === 0) {
-                    msg += `✅ بقایا رقم (Balance Due): *Rs. 0 (مکمل ادا شدہ / Paid)*\n`;
-                  } else {
-                    msg += `⏳ بقایا واجب الادا (Balance Due): *Rs. ${bal}*\n`;
-                  }
-                }
-
-                msg += `\n━━━━━━━━━━━━━━━━━━━━\n`;
-                msg += `✨ *آزاد ماسٹر (Azad Master)*`;
-                const encoded = encodeURIComponent(msg);
-                window.open(`https://wa.me/${cleanPhone}?text=${encoded}`, '_blank');
-              };
-
-              return (
-                <div 
-                  key={item.id} 
-                  id={`customer-slip-card-${item.id}`}
-                  onClick={() => setActiveSlip(item)}
-                  className={`bg-white p-2.5 rounded-xl shadow-2xs border border-slate-200/90 hover:border-[#128c7e] cursor-pointer transition-all space-y-1.5 active:scale-[0.99] ${
-                    isRtl ? 'border-r-4 border-r-[#075e54]' : 'border-l-4 border-l-[#075e54]'
-                  }`}
-                >
-                  {/* Card Header: Avatar, Name, Phone, Status Pill */}
-                  <div className="flex justify-between items-center gap-2">
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      {/* Customer Single Letter Avatar / Photo */}
-                      <div className="w-8 h-8 rounded-full overflow-hidden bg-[#e7f7ef] border border-[#128c7e]/30 flex items-center justify-center text-[#075e54] font-bold text-xs shadow-2xs shrink-0">
-                        {item.imageUri ? (
-                          <img src={item.imageUri} alt={item.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <span>{item.name.trim().charAt(0).toUpperCase() || 'P'}</span>
-                        )}
-                      </div>
-
-                      <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                        <h3 className="font-bold text-[#111b21] text-[13.5px] leading-tight truncate">
-                          {item.name}
-                        </h3>
-                        <p className="text-[11px] text-[#54656f] font-medium flex items-center gap-1 shrink-0" dir="ltr">
-                          <span>{phoneInfo.flag}</span>
-                          <span>{phoneInfo.number}</span>
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {/* Status Badge */}
-                      <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-0.5 ${statusMeta.badgeClass}`}>
-                        <span>{statusMeta.icon}</span>
-                        <span>{isRtl ? statusMeta.shortUrdu : statusMeta.labelEn}</span>
-                      </span>
-                      <span className="text-slate-400 font-bold text-xs">
-                        {isRtl ? '←' : '→'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Accounts / Financial Strip - Compact row */}
-                  {item.totalAmount !== undefined && item.totalAmount !== null && item.totalAmount !== '' && (
-                    <div className="flex items-center justify-between bg-[#f0faf4] border border-[#128c7e]/20 rounded-md px-2 py-0.5 text-[10.5px]">
-                      <div className="flex items-center gap-1.5 text-slate-700 flex-wrap">
-                        <span className="text-slate-500 font-medium">{isRtl ? 'کل:' : 'Total:'}</span>
-                        <span className="font-black text-slate-900">Rs. {item.totalAmount}</span>
-                        <span className="text-slate-300">•</span>
-                        <span className="text-[#075e54] font-medium">{isRtl ? 'ایڈوانس:' : 'Adv:'}</span>
-                        <span className="font-black text-[#075e54]">Rs. {item.advanceAmount || 0}</span>
-                      </div>
-                      <div>
-                        {Number(item.balanceAmount || 0) === 0 ? (
-                          <span className="text-[9px] font-black text-[#075e54] bg-[#dcf8c6] border border-[#00a884]/40 px-1.5 py-0.2 rounded">
-                            {isRtl ? '✓ ادا شدہ' : 'Paid'}
-                          </span>
-                        ) : (
-                          <span className="text-[9px] font-black text-amber-900 bg-amber-100 border border-amber-300 px-1.5 py-0.2 rounded">
-                            {isRtl ? 'بقایا: ' : 'Bal: '}Rs. {item.balanceAmount !== undefined ? item.balanceAmount : Math.max(0, (parseFloat(String(item.totalAmount || 0)) - parseFloat(String(item.advanceAmount || 0))))}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Card Footer: Date, Delivery, Quick Status Switcher & WhatsApp Share */}
-                  <div 
-                    onClick={(e) => e.stopPropagation()} 
-                    className="flex items-center justify-between gap-1.5 border-t border-[#f1f5f9] pt-1 text-[10.5px]"
+                return (
+                  <div
+                    key={customer.id}
+                    id={`customer-card-${customer.id}`}
+                    onClick={() => setActiveSlip(customer)}
+                    className="bg-white rounded-xl p-3 shadow-xs hover:shadow-md transition-all border border-slate-200/80 cursor-pointer active:scale-[0.99] relative overflow-hidden group"
                   >
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[10px] text-slate-500 flex items-center gap-0.5">
-                        <Calendar className="w-2.5 h-2.5 text-slate-400" />
-                        <span>{item.date}</span>
+                    {/* Status Top Indicator Bar */}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-[#e7f7ef] text-[#075e54] flex items-center justify-center font-black text-sm shrink-0 border border-[#128c7e]/20">
+                          {customer.name ? customer.name.trim().charAt(0) : '👤'}
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-sm text-slate-800 group-hover:text-[#075e54] transition-colors">
+                            {customer.name || (isRtl ? 'نامعلوم گاہک' : 'Unnamed Customer')}
+                          </h4>
+                          <p className="text-[11px] text-[#54656f] font-mono flex items-center gap-1" dir="ltr">
+                            <Phone className="w-3 h-3 text-[#25d366]" />
+                            <span>{customer.phone || 'No phone'}</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Status Chip */}
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${statusMeta.badgeClass}`}>
+                        <span>{statusMeta.icon}</span>
+                        <span>{isRtl ? statusMeta.labelUrdu : statusMeta.labelEn}</span>
                       </span>
-
-                      {item.deliveryDate && (
-                        <span className="text-[9.5px] text-[#075e54] font-bold flex items-center gap-0.5 bg-[#e7f7ef] px-1 py-0.2 rounded border border-[#128c7e]/25">
-                          <span>🚀</span>
-                          <span>{item.deliveryDate}</span>
-                        </span>
-                      )}
-
-                      {isDeliveryLate(item.deliveryDate, itemStatus) && (
-                        <span className="text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300 px-1 py-0.2 rounded flex items-center gap-0.5 animate-pulse">
-                          ⚠️ {isRtl ? 'تاخیر' : 'Late'}
-                        </span>
-                      )}
-
-                      {isDeliveryToday(item.deliveryDate, itemStatus) && (
-                        <span className="text-[9px] font-black bg-[#dcf8c6] text-[#075e54] border border-[#00a884]/40 px-1 py-0.2 rounded flex items-center gap-0.5 animate-pulse">
-                          ⚡ {isRtl ? 'آج' : 'Today'}
-                        </span>
-                      )}
-
-                      <select
-                        id={`card-status-select-${item.id}`}
-                        value={itemStatus}
-                        onChange={(e) => handleUpdateStatus(item.id, e.target.value as OrderStatus, e as any)}
-                        className={`text-[9.5px] font-bold py-0.5 px-1.5 rounded border outline-none cursor-pointer shadow-2xs ${statusMeta.badgeClass}`}
-                      >
-                        <option value="pending">⏳ {isRtl ? 'زیرِ کار' : 'Pending'}</option>
-                        <option value="cutting">✂️ {isRtl ? 'کٹنگ' : 'Cutting'}</option>
-                        <option value="stitching">🧵 {isRtl ? 'سلائی' : 'Stitching'}</option>
-                        <option value="ready">🟢 {isRtl ? 'تیار ہے' : 'Ready'}</option>
-                        <option value="delivered">✅ {isRtl ? 'حوالے' : 'Delivered'}</option>
-                      </select>
                     </div>
 
-                    {/* Direct WhatsApp Share Button */}
-                    <button
-                      type="button"
-                      id={`card-whatsapp-btn-${item.id}`}
-                      onClick={generateWhatsAppUrl}
-                      className="glow-whatsapp bg-[#25d366] hover:bg-[#20ba59] active:scale-95 text-white text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-0.5 shadow-2xs transition-transform cursor-pointer shrink-0"
-                      title={isRtl ? 'واٹس ایپ پر بھیجیں' : 'Send on WhatsApp'}
-                    >
-                      <MessageCircle className="w-3 h-3 fill-white" />
-                      <span>{isRtl ? 'واٹس ایپ' : 'WhatsApp'}</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+                    {/* Delivery & Accounts Row */}
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px]">
+                      <div className="flex items-center gap-1 text-slate-500">
+                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                        <span>{isRtl ? 'تاریخ:' : 'Date:'}</span>
+                        <span className="font-medium text-slate-700">{customer.date}</span>
+                        {customer.deliveryDate && (
+                          <span className={`ml-1 font-bold ${
+                            isDelivLate ? 'text-rose-600' : isDelivToday ? 'text-emerald-700' : 'text-slate-600'
+                          }`}>
+                            • {isRtl ? 'ڈیلیوری:' : 'Deliv:'} {customer.deliveryDate}
+                          </span>
+                        )}
+                      </div>
 
-        {/* Bottom Navigation Bar - Balanced Home, AI Assistant, and Add Slip Buttons */}
+                      {/* Balance amount badge */}
+                      {customer.balanceAmount && Number(customer.balanceAmount) > 0 ? (
+                        <span className="text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded font-bold text-[10px]">
+                          {isRtl ? `باقی: Rs ${customer.balanceAmount}` : `Bal: Rs ${customer.balanceAmount}`}
+                        </span>
+                      ) : (
+                        <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-bold text-[10px]">
+                          {isRtl ? 'کھاتہ صاف' : 'Cleared'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </main>
+
+        {/* Bottom Ergonomic Navigation Bar */}
         <div 
           id="bottom-nav-bar"
           className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 h-16 px-3 sm:px-5 flex items-center justify-between shrink-0 z-40 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] select-none"
@@ -1330,7 +1195,7 @@ export default function AzadMasterFinalApp() {
             <span className="tracking-wide text-[11.5px] font-bold">{isRtl ? 'اسسٹنٹ' : 'Assistant'}</span>
           </button>
 
-          {/* Plus Action Button - Ergonomic, prominent button with clear label */}
+          {/* Plus Action Button */}
           <button 
             id="nav-add-btn"
             type="button"
@@ -1451,7 +1316,7 @@ export default function AzadMasterFinalApp() {
 
         {showSettings && (
           <SettingsModal
-            masterName={masterName}
+            masterName={masterName || currentUser?.displayName || 'Master Tailor'}
             masterPhoto={masterPhoto}
             onUpdateProfile={handleUpdateProfile}
             customers={customers}

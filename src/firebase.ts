@@ -1,9 +1,12 @@
 import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
-  RecaptchaVerifier, 
-  signInWithPhoneNumber, 
-  ConfirmationResult, 
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  setPersistence,
+  browserLocalPersistence,
   signOut, 
   onAuthStateChanged,
   User 
@@ -13,11 +16,12 @@ import {
   collection, 
   addDoc, 
   setDoc,
-  deleteDoc,
+  deleteDoc, 
   getDocs, 
-  onSnapshot,
+  getDoc,
+  onSnapshot, 
   query, 
-  orderBy, 
+  where,
   doc, 
   getDocFromServer 
 } from 'firebase/firestore';
@@ -31,10 +35,19 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 
+// Enable local persistence
+setPersistence(auth, browserLocalPersistence).catch((err) => {
+  console.warn("Could not enable browser local persistence:", err);
+});
+
 // Connection test helper
 export async function testFirebaseConnection() {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    if (!auth.currentUser) {
+      // If not logged in yet, connection is ready once user signs in
+      return true;
+    }
+    await getDocFromServer(doc(db, 'users', auth.currentUser.uid));
     console.log("Firebase Firestore connected successfully.");
     return true;
   } catch (error) {
@@ -46,58 +59,35 @@ export async function testFirebaseConnection() {
 }
 
 /**
- * Initializes and binds RecaptchaVerifier to a DOM container
+ * Signs in user with Google Authentication Popup
  */
-export function setUpRecaptcha(containerId: string): RecaptchaVerifier {
-  try {
-    if (typeof window !== 'undefined' && (window as any).recaptchaVerifier) {
-      try {
-        (window as any).recaptchaVerifier.clear();
-      } catch (e) {
-        // ignore reset error
-      }
-    }
-
-    const verifier = new RecaptchaVerifier(auth, containerId, {
-      size: 'invisible',
-      callback: () => {
-        // reCAPTCHA solved
-      },
-      'expired-callback': () => {
-        console.warn('reCAPTCHA expired, please try again.');
-      }
-    });
-
-    if (typeof window !== 'undefined') {
-      (window as any).recaptchaVerifier = verifier;
-    }
-
-    return verifier;
-  } catch (err) {
-    console.error("Error setting up reCAPTCHA:", err);
-    throw err;
-  }
-}
-
-/**
- * Sends Phone OTP via Firebase Authentication
- */
-export async function sendFirebasePhoneOtp(
-  phoneNumber: string, 
-  appVerifier: RecaptchaVerifier
-): Promise<ConfirmationResult> {
-  return await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
-}
-
-/**
- * Verifies 6-digit OTP code against confirmation result
- */
-export async function verifyFirebasePhoneOtp(
-  confirmationResult: ConfirmationResult, 
-  otpCode: string
-): Promise<User> {
-  const result = await confirmationResult.confirm(otpCode);
+export async function signInWithGoogle(): Promise<User> {
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  const result = await signInWithPopup(auth, provider);
   return result.user;
+}
+
+/**
+ * Signs in user with Google Redirect (useful if popups/cookies are blocked in iframe)
+ */
+export async function signInWithGoogleRedirect(): Promise<void> {
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  await signInWithRedirect(auth, provider);
+}
+
+/**
+ * Checks for redirect auth results upon page return
+ */
+export async function checkRedirectAuthResult(): Promise<User | null> {
+  try {
+    const result = await getRedirectResult(auth);
+    return result?.user || null;
+  } catch (error) {
+    console.warn("Redirect result error:", error);
+    throw error;
+  }
 }
 
 /**
@@ -105,6 +95,58 @@ export async function verifyFirebasePhoneOtp(
  */
 export async function signOutUser() {
   return await signOut(auth);
+}
+
+export interface UserProfile {
+  uid: string;
+  name: string;
+  email?: string | null;
+  photo?: string | null;
+  phone?: string;
+  updatedAt?: string;
+}
+
+/**
+ * Save / Update tailor master profile in Firestore scoped to user's UID
+ */
+export async function saveUserProfileToFirestore(profile: Partial<UserProfile>): Promise<boolean> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) return false;
+  const path = `users/${currentUser.uid}`;
+  try {
+    const docRef = doc(db, 'users', currentUser.uid);
+    await setDoc(docRef, {
+      uid: currentUser.uid,
+      name: profile.name || currentUser.displayName || 'Master Tailor',
+      email: currentUser.email || '',
+      photo: profile.photo !== undefined ? profile.photo : currentUser.photoURL || null,
+      phone: profile.phone || '',
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    return true;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+    return false;
+  }
+}
+
+/**
+ * Fetch tailor master profile from Firestore
+ */
+export async function getUserProfileFromFirestore(uid: string): Promise<UserProfile | null> {
+  if (!uid) return null;
+  const path = `users/${uid}`;
+  try {
+    const docRef = doc(db, 'users', uid);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return snap.data() as UserProfile;
+    }
+    return null;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, path);
+    return null;
+  }
 }
 
 /**
@@ -137,6 +179,7 @@ export async function processWithGeminiAI(userInput: string) {
 }
 
 export interface TailoringOrderData {
+  ownerId?: string;
   customerName?: string;
   phone?: string;
   suitType?: string;
@@ -151,32 +194,47 @@ export interface TailoringOrderData {
  * @param measurementData - فائنل ناپ اور کسٹمر ڈیٹا
  */
 export async function saveMeasurementToFirebase(measurementData: TailoringOrderData) {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.warn("Cannot save measurement: User not authenticated.");
+    return { success: false, error: "Not authenticated" };
+  }
+  const path = 'tailoring_orders';
   try {
-    const docRef = await addDoc(collection(db, "tailoring_orders"), {
+    const docRef = await addDoc(collection(db, path), {
       ...measurementData,
+      ownerId: currentUser.uid,
       createdAt: new Date().toISOString()
     });
-    console.log("Document successfully written with ID: ", docRef.id);
+    console.log("Order document successfully written with ID: ", docRef.id);
     return { success: true, id: docRef.id };
   } catch (error) {
-    console.error("Error adding document to Firebase: ", error);
+    handleFirestoreError(error, OperationType.CREATE, path);
     return { success: false, error };
   }
 }
 
 /**
- * Firestore سے تمام محفوظ شدہ آرڈرز حاصل کرنے کا فنکشن
+ * Firestore سے تمام محفوظ شدہ آرڈرز حاصل کرنے کا فنکشن (صرف موجودہ لاگ ان ٹیلر کے آرڈرز)
  */
 export async function getTailoringOrdersFromFirebase() {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    return [];
+  }
+  const path = 'tailoring_orders';
   try {
-    const q = query(collection(db, "tailoring_orders"));
+    const q = query(
+      collection(db, path),
+      where('ownerId', '==', currentUser.uid)
+    );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
+    return snapshot.docs.map(docSnap => ({
+      id: docSnap.id,
+      ...docSnap.data()
     }));
   } catch (error) {
-    console.error("Error fetching orders from Firebase: ", error);
+    handleFirestoreError(error, OperationType.LIST, path);
     return [];
   }
 }
@@ -229,15 +287,23 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 }
 
 /**
- * گاہک اور ناپ کے تمام ریکارڈ، پیمائش اور کھاتہ کو کلاؤڈ فائر اسٹور میں خودکار محفوظ کرنا
+ * گاہک اور ناپ کے تمام ریکارڈ، پیمائش اور کھاتہ کو کلاؤڈ فائر اسٹور میں محفوظ کرنا
+ * محفوظ ID کا پیٹرن: ${ownerId}_${customer.id} تاکہ الگ الگ ٹیلرز کا ڈیٹا ایک دوسرے سے الگ رہے
  */
 export async function saveCustomerToFirestore(customer: Customer) {
-  const path = `tailoring_customers/${customer.id}`;
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.warn("Save aborted: No authenticated user.");
+    return { success: false, error: "Not authenticated" };
+  }
+  const uid = currentUser.uid;
+  const docId = `${uid}_${customer.id}`;
+  const path = `tailoring_customers/${docId}`;
   try {
-    const docId = String(customer.id);
     const docRef = doc(db, "tailoring_customers", docId);
     await setDoc(docRef, {
       id: customer.id,
+      ownerId: uid,
       name: customer.name || '',
       phone: customer.phone || '',
       date: customer.date || new Date().toLocaleDateString('en-GB'),
@@ -263,12 +329,18 @@ export async function saveCustomerToFirestore(customer: Customer) {
  * تمام موجودہ کسٹمرز کو بیک وقت کلاؤڈ میں سنک اور محفوظ کرنا
  */
 export async function syncAllCustomersToFirestore(customers: Customer[]): Promise<{ success: boolean; count: number; error?: any }> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    return { success: false, count: 0, error: "Not authenticated" };
+  }
   try {
     let count = 0;
     for (const customer of customers) {
       if (customer && customer.id) {
-        await saveCustomerToFirestore(customer);
-        count++;
+        const res = await saveCustomerToFirestore(customer);
+        if (res.success) {
+          count++;
+        }
       }
     }
     return { success: true, count };
@@ -282,9 +354,15 @@ export async function syncAllCustomersToFirestore(customers: Customer[]): Promis
  * فائر اسٹور سے کسٹمر سلپ ڈیلیٹ کرنا
  */
 export async function deleteCustomerFromFirestore(customerId: number) {
-  const path = `tailoring_customers/${customerId}`;
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    return { success: false, error: "Not authenticated" };
+  }
+  const uid = currentUser.uid;
+  const docId = `${uid}_${customerId}`;
+  const path = `tailoring_customers/${docId}`;
   try {
-    const docRef = doc(db, "tailoring_customers", String(customerId));
+    const docRef = doc(db, "tailoring_customers", docId);
     await deleteDoc(docRef);
     return { success: true };
   } catch (error) {
@@ -295,33 +373,43 @@ export async function deleteCustomerFromFirestore(customerId: number) {
 
 /**
  * ریئل ٹائم فائر اسٹور کسٹمرز سنکنگ سبسکرپشن (Cloud Auto-Save Listener)
+ * جہاں صرف لاگ ان ٹیلر کے اپنے کسٹمرز (ownerId == auth.currentUser.uid) سنک ہوتے ہیں
+ * اور جب کسٹمر ڈیلیٹ ہو تو خالی لسٹ بھی واپس کی جاتی ہے تاکہ اسکرین فوراً اپڈیٹ ہو
  */
 export function subscribeToCustomerRecords(onUpdate: (customers: Customer[]) => void) {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    onUpdate([]);
+    return () => {};
+  }
+  const uid = currentUser.uid;
   const path = 'tailoring_customers';
   try {
-    const q = query(collection(db, path));
+    const q = query(
+      collection(db, path),
+      where('ownerId', '==', uid)
+    );
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (!snapshot.empty) {
-        const cloudCustomers: Customer[] = snapshot.docs.map(d => {
-          const data = d.data();
-          return {
-            id: typeof data.id === 'number' ? data.id : Number(d.id) || Date.now(),
-            name: data.name || '',
-            phone: data.phone || '',
-            date: data.date || '',
-            deliveryDate: data.deliveryDate || '',
-            details: data.details || '',
-            suitType: data.suitType || 'gents_suit',
-            status: data.status || 'pending',
-            totalAmount: data.totalAmount !== undefined ? String(data.totalAmount) : '',
-            advanceAmount: data.advanceAmount !== undefined ? String(data.advanceAmount) : '',
-            balanceAmount: data.balanceAmount !== undefined ? String(data.balanceAmount) : '',
-            measurementsObj: data.measurementsObj || {},
-            imageUri: data.imageUri || null
-          } as Customer;
-        });
-        onUpdate(cloudCustomers);
-      }
+      const cloudCustomers: Customer[] = snapshot.docs.map(d => {
+        const data = d.data();
+        return {
+          id: typeof data.id === 'number' ? data.id : Number(data.id) || Date.now(),
+          name: data.name || '',
+          phone: data.phone || '',
+          date: data.date || '',
+          deliveryDate: data.deliveryDate || '',
+          details: data.details || '',
+          suitType: data.suitType || 'gents_suit',
+          status: data.status || 'pending',
+          totalAmount: data.totalAmount !== undefined ? String(data.totalAmount) : '',
+          advanceAmount: data.advanceAmount !== undefined ? String(data.advanceAmount) : '',
+          balanceAmount: data.balanceAmount !== undefined ? String(data.balanceAmount) : '',
+          measurementsObj: data.measurementsObj || {},
+          imageUri: data.imageUri || null
+        } as Customer;
+      });
+      // CRITICAL: Call onUpdate even if snapshot is empty so screen updates on deletion of last customer
+      onUpdate(cloudCustomers);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, path);
     });

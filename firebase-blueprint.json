@@ -1,11 +1,26 @@
 {
   "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Tailor master profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string", "maxLength": 150 },
+        "email": { "type": "string", "maxLength": 150 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "photo": { "type": "string", "maxLength": 500000 },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "name"]
+    },
     "TailoringCustomer": {
       "title": "Tailoring Customer Record",
       "description": "Customer digital tailoring slip, measurements, and billing details",
       "type": "object",
       "properties": {
         "id": { "type": "number" },
+        "ownerId": { "type": "string" },
         "name": { "type": "string", "maxLength": 150 },
         "phone": { "type": "string", "maxLength": 50 },
         "date": { "type": "string", "maxLength": 50 },
@@ -19,13 +34,14 @@
         "imageUri": { "type": "string", "maxLength": 500000 },
         "updatedAt": { "type": "string" }
       },
-      "required": ["name", "phone"]
+      "required": ["ownerId", "name", "phone"]
     },
     "TailoringOrder": {
       "title": "Tailoring Order",
       "description": "Garment measurements and customer order information",
       "type": "object",
       "properties": {
+        "ownerId": { "type": "string" },
         "customerName": { "type": "string", "maxLength": 100 },
         "phone": { "type": "string", "maxLength": 30 },
         "measurements": { "type": "object" },
@@ -34,17 +50,21 @@
         "notes": { "type": "string", "maxLength": 500 },
         "createdAt": { "type": "string" }
       },
-      "required": ["measurements"]
+      "required": ["ownerId", "measurements"]
     }
   },
   "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile document for individual tailors"
+    },
     "/tailoring_customers/{customerId}": {
       "schema": "TailoringCustomer",
-      "description": "Collection of all customer tailoring slips, measurements, and billing accounts for cloud auto-save"
+      "description": "Collection of all customer tailoring slips, measurements, and billing accounts scoped by ownerId"
     },
     "/tailoring_orders/{orderId}": {
       "schema": "TailoringOrder",
-      "description": "Collection of confirmed tailoring orders and measurements"
+      "description": "Collection of confirmed tailoring orders and measurements scoped by ownerId"
     }
   }
 }
