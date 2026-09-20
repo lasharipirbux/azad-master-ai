@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { CustomerMeasurements } from '../types';
+import { CustomerMeasurements, SupportedLanguage } from '../types';
 import { X, Mic, MicOff, Volume2, Sparkles, CheckCircle2, RotateCcw } from 'lucide-react';
 import { speakText, stopSpeaking } from '../utils/speechSynthesis';
 import { parseMeasurementsFromText } from '../utils/measurementParser';
@@ -11,6 +11,7 @@ interface VoiceConversationScreenProps {
   onApplyMeasurements?: (measurements: Partial<CustomerMeasurements>) => void;
   onNewMessageFromVoice?: (userText: string, botText: string, detectedMeasurements?: Partial<CustomerMeasurements>) => void;
   masterName?: string;
+  currentLang?: SupportedLanguage;
 }
 
 type ConversationState = 'idle' | 'listening' | 'processing' | 'speaking';
@@ -20,7 +21,8 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
   isRtl,
   onApplyMeasurements,
   onNewMessageFromVoice,
-  masterName
+  masterName,
+  currentLang = 'ur'
 }) => {
   const [conversationState, setConversationState] = useState<ConversationState>('idle');
   const [userTranscript, setUserTranscript] = useState<string>('');
@@ -35,6 +37,16 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
   const isMountedRef = useRef(true);
   const isMutedRef = useRef(isMuted);
 
+  const getSpeechLang = (): string => {
+    if (currentLang === 'en') return 'en-US';
+    if (currentLang === 'hi') return 'hi-IN';
+    if (currentLang === 'sd') return 'ur-PK';
+    if (currentLang === 'ar') return 'ar-SA';
+    if (currentLang === 'fa') return 'fa-IR';
+    if (currentLang === 'ps') return 'ps-AF';
+    return isRtl ? 'ur-PK' : 'en-US';
+  };
+
   useEffect(() => {
     isMutedRef.current = isMuted;
   }, [isMuted]);
@@ -43,18 +55,32 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
   useEffect(() => {
     isMountedRef.current = true;
 
-    const tailorGreetingName = masterName?.trim() || (isRtl ? 'ماسٹر صاحب' : 'Master Tailor');
-    const initialGreeting = isRtl
-      ? `جی ${tailorGreetingName}! میں سن رہا ہوں۔ آپ ناپ یا کٹنگ کا کوئی بھی سوال بول سکتے ہیں۔`
-      : `Hello ${tailorGreetingName}! I am listening. Speak your measurements or any tailoring question.`;
+    const tailorGreetingName = masterName?.trim() || (isRtl ? (currentLang === 'sd' ? 'استاد صاحب' : 'ماسٹر صاحب') : 'Master Tailor');
+    let initialGreeting = '';
+    if (currentLang === 'en') {
+      initialGreeting = `Hello ${tailorGreetingName}! I am listening. Speak your measurements or any tailoring question.`;
+    } else if (currentLang === 'sd') {
+      initialGreeting = `جي ${tailorGreetingName}! مان ٻڌي رهيو آهيان. اوهان ماپ يا ڪٽنگ جو ڪوبه سوال ڳالهائي سگهو ٿا.`;
+    } else if (currentLang === 'hi') {
+      initialGreeting = `नमस्ते ${tailorGreetingName}! मैं सुन रहा हूँ। आप माप या कटिंग का कोई भी सवाल बोल सकते हैं।`;
+    } else if (isRtl) {
+      initialGreeting = `جی ${tailorGreetingName}! میں سن رہا ہوں۔ آپ ناپ یا کٹنگ کا کوئی بھی سوال بول سکتے ہیں۔`;
+    } else {
+      initialGreeting = `Hello ${tailorGreetingName}! I am listening. Speak your measurements or any tailoring question.`;
+    }
 
     setAiResponseText(initialGreeting);
-    setStatusNote(isRtl ? 'آزاد ماسٹر اسسٹنٹ بول رہا ہے...' : 'Azad Master Assistant speaking...');
+    setStatusNote(
+      currentLang === 'en' ? 'Azad Master Assistant speaking...' :
+      currentLang === 'sd' ? 'آزاد ماسٽر اسسٽنٽ ڳالهائي رهيو آهي...' :
+      currentLang === 'hi' ? 'आजाद मास्टर असिस्टेंट बोल रहा है...' :
+      (isRtl ? 'آزاد ماسٹر اسسٹنٹ بول رہا ہے...' : 'Azad Master Assistant speaking...')
+    );
     setConversationState('speaking');
 
     cancelSpeechRef.current = speakText(
       initialGreeting,
-      isRtl ? 'ur-PK' : 'en-US',
+      getSpeechLang(),
       () => {
         if (isMountedRef.current) setConversationState('speaking');
       },
@@ -63,7 +89,11 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
           startListening();
         } else if (isMountedRef.current) {
           setConversationState('idle');
-          setStatusNote(isRtl ? 'مائیکروفون آف ہے' : 'Microphone is muted');
+          setStatusNote(
+            currentLang === 'en' ? 'Microphone is muted' :
+            currentLang === 'sd' ? 'مائيڪروفون بند آهي' :
+            (isRtl ? 'مائیکروفون آف ہے' : 'Microphone is muted')
+          );
         }
       },
       () => {
@@ -82,7 +112,7 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
         } catch {}
       }
     };
-  }, []);
+  }, [currentLang]);
 
   const startListening = () => {
     if (isMutedRef.current) return;
@@ -183,16 +213,30 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: spokenText })
+        body: JSON.stringify({ 
+          message: spokenText,
+          language: currentLang || (isRtl ? 'ur' : 'en')
+        })
       });
 
       const data = await response.json();
       const detected = data.parsedMeasurements || localParsed;
 
-      const callerTitle = masterName?.trim() || (isRtl ? 'ماسٹر صاحب' : 'Master');
-      let replyText = data.reply || (isRtl 
-        ? `جی ${callerTitle}! آپ کی بات سمجھ آ گئی ہے۔` 
-        : `Got it, ${callerTitle}!`);
+      const callerTitle = masterName?.trim() || (isRtl ? (currentLang === 'sd' ? 'استاد صاحب' : 'ماسٹر صاحب') : 'Master');
+      let replyText = data.reply;
+      if (!replyText) {
+        if (currentLang === 'en') {
+          replyText = `Got it, ${callerTitle}!`;
+        } else if (currentLang === 'sd') {
+          replyText = `جي ${callerTitle}! اوهان جي ڳالهه سمجهه ۾ اچي وئي.`;
+        } else if (currentLang === 'hi') {
+          replyText = `जी ${callerTitle}! आपकी बात समझ आ गई।`;
+        } else if (isRtl) {
+          replyText = `جی ${callerTitle}! آپ کی بات سمجھ آ گئی ہے۔`;
+        } else {
+          replyText = `Got it, ${callerTitle}!`;
+        }
+      }
 
       if (detected && Object.keys(detected).length > 0) {
         setDetectedMeasurements(detected);
@@ -207,11 +251,16 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
 
       // Now speak the response aloud
       setConversationState('speaking');
-      setStatusNote(isRtl ? 'آزاد AI جواب دے رہا ہے...' : 'Azad AI responding...');
+      setStatusNote(
+        currentLang === 'en' ? 'Azad AI responding...' :
+        currentLang === 'sd' ? 'آزاد اي آءِ جواب ڏئي رهيو آهي...' :
+        currentLang === 'hi' ? 'आजाद एआई जवाब दे रहा है...' :
+        (isRtl ? 'آزاد AI جواب دے رہا ہے...' : 'Azad AI responding...')
+      );
 
       cancelSpeechRef.current = speakText(
         replyText,
-        isRtl ? 'ur-PK' : 'en-US',
+        getSpeechLang(),
         () => {
           if (isMountedRef.current) setConversationState('speaking');
         },

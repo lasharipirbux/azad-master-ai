@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChatMessage, CustomerMeasurements } from '../types';
+import { ChatMessage, CustomerMeasurements, SupportedLanguage } from '../types';
 import { Bot, X, User, Scissors, CheckCircle, Volume2, VolumeX, Sparkles } from 'lucide-react';
 import { parseMeasurementsFromText } from '../utils/measurementParser';
 import { VoiceConversationScreen } from './VoiceConversationScreen';
@@ -12,22 +12,79 @@ interface ChatbotModalProps {
   isRtl: boolean;
   onApplyMeasurements?: (measurements: Partial<CustomerMeasurements>) => void;
   masterName?: string;
+  currentLang?: SupportedLanguage;
 }
+
+const getInitialBotGreeting = (lang: string = 'ur'): string => {
+  if (lang === 'en') {
+    return 'Hello! I am Azad Master Assistant.\n\nYou can speak or type measurements (e.g. Length 42, Shoulder 18.5, Sleeves 23, Chest 38, Daaman 24, Collar 15.5, Shalwar 38, Pancha 8.5). I will map each measurement to its proper field, present a full preview, and will never save to the database without your explicit confirmation.';
+  }
+  if (lang === 'sd') {
+    return 'اسلام عليڪم! مان آزاد ماسٽر اسسٽنٽ آهيان.\n\nاوهان ماپ ڳالهائي يا لکي ٻڌائي سگهو ٿا (مثال: لمبائي 42، ٽيرو 19، ٻانهن 23، ڇاتي 38، دامن 24، ڪالر 15.5، شلوار 38، پانچو 8.5). مان ماپ جا سڀ تفصيل ترتيب ڏئي اوهان کي اڳواٽ جائزو ڏيکاريندس ۽ اوهان جي تصديق کانسواءِ محفوظ نه ڪندس.';
+  }
+  if (lang === 'hi') {
+    return 'नमस्ते! मैं आजाद मास्टर असिस्टेंट हूँ।\n\nआप माप बोलकर या लिखकर बता सकते हैं (जैसे: लम्बाई 42, तीरा 19, बाजू 23, सीना 38, दामन 24, कॉलर 15.5, सलवार 38, पाँचा 8.5)। मैं हर माप को सही खाने में रखकर पहले आपको पूरा प्रीव्यू दिखाऊँगा और आपकी पुष्टि के बिना सुरक्षित नहीं करूँगा।';
+  }
+  if (lang === 'ar') {
+    return 'مرحباً! أنا مساعد أزاد ماستر.\n\nيمكنك نطق القياسات أو كتابتها (مثلاً: الطول 42، الكتف 19، الكم 23، الصدر 38، الياقة 15.5). سأقوم بترتيب كل قياس في خانته وعرض معاينة كاملة لك ولن أقوم بالحفظ دون تأكيدك.';
+  }
+  return 'السلام علیکم! میں آزاد ماسٹر اسسٹنٹ ہوں۔\n\nآپ ناپ بول کر یا لکھ کر بتا سکتے ہیں (مثلاً: لمبائی 42، تیرا 20، بازو 23، سینہ 38، گھیرا 25، کالر 15، شلوار 40، پانچہ 9)۔ میں ہر ناپ کو اس کے اصل خانے میں رکھ کر پہلے آپ کو مکمل جائزہ دکھاؤں گا اور آپ کی اجازت (تصدیق) کے بغیر محفوظ نہیں کروں گا۔';
+};
+
+const getQuickPromptsList = (lang: string = 'ur'): string[] => {
+  if (lang === 'en') {
+    return [
+      'Length 42, Shoulder 18.5, Sleeves 23, Chest 38, Daaman 24, Collar 15.5, Shalwar 38, Pancha 8.5',
+      'How much fabric is required for a gents suit?',
+      'Shoulder and armhole cutting formula',
+      'How to cut Ban and Collar accurately?'
+    ];
+  }
+  if (lang === 'sd') {
+    return [
+      'لمبائي 42، ٽيرو 19، ٻانهن 23، ڇاتي 38، دامن 24، ڪالر 15.5، شلوار 38، پانچو 8.5',
+      'هڪ سوٽ لاءِ ڪيترو ڪپڙو گهربل هوندو آهي؟',
+      'ٽيرو ۽ آرم هول جو ڪٽنگ فارمولو ڇا آهي؟',
+      'بين ۽ ڪالر جي ڪٽنگ ڪيئن ڪجي؟'
+    ];
+  }
+  if (lang === 'hi') {
+    return [
+      'लम्बाई 42, तीरा 19, बाजू 23, सीना 38, दामन 24, कॉलर 15.5, सलवार 38, पाँचा 8.5',
+      'एक सूट के लिए कितना कपड़ा चाहिए?',
+      'तीरा और आर्महोल का कटिंग फार्मूला',
+      'बैन और कॉलर की सही कटिंग कैसे करें?'
+    ];
+  }
+  if (lang === 'ar') {
+    return [
+      'الطول 42، الكتف 19، الكم 23، الصدر 38، المحيط 24، الياقة 15.5، السروال 38، الحاشية 8.5',
+      'كم متر قماش يحتاج الثوب الرجالي؟',
+      'معادلة قص الكتف وحردة الإبط',
+      'كيفية قص الياقة بشكل دقيق؟'
+    ];
+  }
+  return [
+    'لمبائی 42، تیرا 20، بازو 23، سینہ 38، گھیرا 25، کالر 15، شلوار 40، پانچہ 9',
+    'سوٹ کے لیے کتنا کپڑا درکار ہے؟',
+    'تیرا (Shoulder) اور آرم ہول کا فارمولا',
+    'بین اور کالر کی کٹنگ کیسے کریں؟'
+  ];
+};
 
 export const ChatbotModal: React.FC<ChatbotModalProps> = ({
   onClose,
   translations: t,
   isRtl,
   onApplyMeasurements,
-  masterName
+  masterName,
+  currentLang = 'ur'
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
       sender: 'bot',
-      text: isRtl 
-        ? 'السلام علیکم! میں آزاد ماسٹر اسسٹنٹ ہوں۔\n\nآپ ناپ بول کر یا لکھ کر بتا سکتے ہیں (مثلاً: لمبائی 42، تیرا 20، بازو 23، سینہ 38، گھیرا 25، کالر 15، شلوار 40، پانچہ 9)۔ میں ہر ناپ کو اس کے اصل خانے میں رکھ کر پہلے آپ کو مکمل جائزہ دکھاؤں گا اور آپ کی اجازت (تصدیق) کے بغیر محفوظ نہیں کروں گا۔'
-        : 'Hello! I am Azad Master Assistant.\n\nYou can speak or type measurements (e.g. Length 42, Tira 20, Bazo 23, Chest 38, Gheera 25, Collar 15, Shalwar 40, Pancha 9). I will map each measurement to its proper field, present a full preview, and will never save to the database without your explicit confirmation.'
+      text: getInitialBotGreeting(currentLang)
     }
   ]);
   const [inputText, setInputText] = useState('');
@@ -41,6 +98,16 @@ export const ChatbotModal: React.FC<ChatbotModalProps> = ({
   const [isListening, setIsListening] = useState<boolean>(false);
   const recognitionRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Update initial greeting when language changes if conversation hasn't started
+  useEffect(() => {
+    setMessages((prev) => {
+      if (prev.length === 1 && prev[0].id === '1') {
+        return [{ ...prev[0], text: getInitialBotGreeting(currentLang) }];
+      }
+      return prev;
+    });
+  }, [currentLang]);
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -146,90 +213,103 @@ export const ChatbotModal: React.FC<ChatbotModalProps> = ({
     }
   };
 
-  const quickPrompts = isRtl ? [
-    'لمبائی 42، تیرا 20، بازو 23، سینہ 38، گھیرا 25، کالر 15، شلوار 40، پانچہ 9',
-    'سوٹ کے لیے کتنا کپڑا درکار ہے؟',
-    'تیرا (Shoulder) اور آرم ہول کا فارمولا',
-    'بین اور کالر کی کٹنگ کیسے کریں؟'
-  ] : [
-    'Length 42, Tira 20, Bazo 23, Chest 38, Gheera 25, Collar 15, Shalwar 40, Pancha 9',
-    'How much fabric for a gents suit?',
-    'Shoulder to armhole formula',
-    'Collar vs Ban cutting guide'
-  ];
+  const quickPrompts = getQuickPromptsList(currentLang);
+
+  const getSpeechLangCode = (): string => {
+    if (currentLang === 'en') return 'en-US';
+    if (currentLang === 'hi') return 'hi-IN';
+    if (currentLang === 'sd') return 'ur-PK';
+    if (currentLang === 'ar') return 'ar-SA';
+    if (currentLang === 'fa') return 'fa-IR';
+    if (currentLang === 'ps') return 'ps-AF';
+    return isRtl ? 'ur-PK' : 'en-US';
+  };
 
   const getTailorAnswer = (query: string): string => {
     const q = query.toLowerCase();
+    const isEn = currentLang === 'en';
+    const isSd = currentLang === 'sd';
+    const isHi = currentLang === 'hi';
     
     // Developer / Creator Question
-    if (q.includes('who made') || q.includes('who are you') || q.includes('کس نے بنایا') || q.includes('ڈویلپر') || q.includes('developer') || q.includes('creator') || q.includes('کون ہو') || q.includes('kis ne banaya') || q.includes('peer bux') || q.includes('pir bakhash') || q.includes('پیر بخش') || q.includes('naseeb') || q.includes('contact') || q.includes('رابطہ') || q.includes('email') || q.includes('ای میل') || q.includes('نام کیا ہے')) {
-      return isRtl 
-        ? `اس ایپ کو 'نسیب ایس ای او' (Naseeb SEO - پیر بخش) نے بنایا ہے۔ میں آزاد ماسٹر کا آفیشل اسسٹنٹ ہوں اور آپ کی مدد کے لیے ہر وقت حاضر ہوں۔\n\n📧 رابطہ ای میل: naseebseo2626@gmail.com\n💬 واٹس ایپ سپورٹ بھی دستیاب ہے۔`
-        : `This app has been created by Naseeb SEO (Pir Bakhash). I am the official assistant of Azad Master, always ready to help you!\n\n📧 Contact Email: naseebseo2626@gmail.com\n💬 WhatsApp support is also available.`;
+    if (q.includes('who made') || q.includes('who are you') || q.includes('کس نے بنایا') || q.includes('ڪنهن ٺاهي') || q.includes('ڈویلپر') || q.includes('developer') || q.includes('creator') || q.includes('کون ہو') || q.includes('kis ne banaya') || q.includes('peer bux') || q.includes('pir bakhash') || q.includes('پیر بخش') || q.includes('naseeb') || q.includes('contact') || q.includes('رابطہ') || q.includes('email') || q.includes('ای میل') || q.includes('نام کیا ہے')) {
+      if (isEn) {
+        return `This app has been created by Naseeb SEO (Pir Bakhash). I am the official assistant of Azad Master, always ready to help you!\n\n📧 Contact Email: naseebseo2626@gmail.com\n💬 WhatsApp support is also available.`;
+      }
+      if (isSd) {
+        return `هن ايپ کي 'نصيب ايس اي او' (Naseeb SEO - پير بخش) ٺاهيو آهي. مان آزاد ماسٽر جو آفيشل اسسٽنٽ آهيان ۽ اوهان جي خدمت لاءِ هميشه حاضر آهيان.\n\n📧 رابطو اي ميل: naseebseo2626@gmail.com\n💬 واٽس ايپ سپورٽ پڻ موجود آهي.`;
+      }
+      if (isHi) {
+        return `इस ऐप को 'नसीब एसईओ' (Naseeb SEO - पीर बख्श) ने बनाया है। मैं आजाद मास्टर का ऑफिशियल असिस्टेंट हूँ और आपकी सेवा के लिए हमेशा हाज़िर हूँ।\n\n📧 संपर्क ईमेल: naseebseo2626@gmail.com\n💬 व्हाट्सएप सपोर्ट भी उपलब्ध है।`;
+      }
+      return `اس ایپ کو 'نسیب ایس ای او' (Naseeb SEO - پیر بخش) نے بنایا ہے۔ میں آزاد ماسٹر کا آفیشل اسسٹنٹ ہوں اور آپ کی مدد کے لیے ہر وقت حاضر ہوں۔\n\n📧 رابطہ ای میل: naseebseo2626@gmail.com\n💬 واٹس ایپ سپورٹ بھی دستیاب ہے۔`;
     }
 
     // Creation Date Question
-    if (q.includes('date') || q.includes('کب بنایا') || q.includes('تاریخ') || q.includes('when made') || q.includes('kab bana') || q.includes('release')) {
-      return isRtl
-        ? `یہ ایپ ستمبر 2026 (16/17 ستمبر) میں بنائی گئی تھی۔`
-        : `Yeh app September 2026 (16/17 September) mein banayi gayi thi.`;
+    if (q.includes('date') || q.includes('کب بنایا') || q.includes('ڪڏهن ٺاهي') || q.includes('تاریخ') || q.includes('when made') || q.includes('kab bana') || q.includes('release')) {
+      if (isEn) return `This app was created in September 2026 (16/17 September).`;
+      if (isSd) return `هي ايپ سيپٽمبر 2026 (16/17 سيپٽمبر) ۾ ٺاهي وئي هئي.`;
+      if (isHi) return `यह ऐप सितंबर 2026 (16/17 सितंबर) में बनाई गई थी।`;
+      return `یہ ایپ ستمبر 2026 (16/17 ستمبر) میں بنائی گئی تھی۔`;
     }
 
     // Developer Location / Origin Question
-    if (q.includes('where') || q.includes('کہاں کے') || q.includes('location') || q.includes('city') || q.includes('gaon') || q.includes('گاؤں') || q.includes('ضلع') || q.includes('shikarpur') || q.includes('khanpur')) {
-      return isRtl
-        ? `ڈویلپر پاکستان کے ضلع شکارپور، تحصیل خانپور اور گاؤں سردارپور کے رہنے والے ہیں۔`
-        : `Developer Pakistan ke District Shikarpur, Tehsil Khanpur aur Gaon Sardar Pur ke rehne walay hain.`;
+    if (q.includes('where') || q.includes('کہاں کے') || q.includes('ڪٿان جا') || q.includes('location') || q.includes('city') || q.includes('gaon') || q.includes('گاؤں') || q.includes('ڳوٺ') || q.includes('ضلع') || q.includes('shikarpur') || q.includes('khanpur')) {
+      if (isEn) return `The developer is from Sardar Pur Village, Tehsil Khanpur, District Shikarpur, Pakistan.`;
+      if (isSd) return `ڊولپر پاڪستان جي ضلعي شڪارپور، تعلقي خانپور ۽ ڳوٺ سردار پور جا رهواسي آهن.`;
+      if (isHi) return `डेवलपर पाकिस्तान के ज़िला शिकारपुर, तहसील खानपुर और गाँव सरदारपुर के रहने वाले हैं।`;
+      return `ڈویلپر پاکستان کے ضلع شکارپور، تحصیل خانپور اور گاؤں سردارپور کے رہنے والے ہیں۔`;
     }
 
     // Cutting Mode Explanation
-    if (q.includes('cutting mode') || q.includes('کٹنگ موڈ') || q.includes('نارمل موڈ') || q.includes('normal mode')) {
-      return isRtl
-        ? `✂️ کٹنگ موڈ: کٹنگ موڈ بٹن دبانے سے ناپ کے ہندسے بڑے اور نمایاں امبر رنگ میں نظر آتے ہیں تاکہ کٹنگ کرتے وقت دور سے واضح دکھائی دیں۔ دوبارہ کلک پر نارمل موڈ میں آ جاتا ہے۔`
-        : `✂️ Cutting Mode: Cutting mode button turns all measurement boxes into large, high-contrast amber displays for clear table visibility. Click again to return to Normal Mode.`;
+    if (q.includes('cutting mode') || q.includes('کٹنگ موڈ') || q.includes('ڪٽنگ موڊ') || q.includes('نارمل موڈ') || q.includes('normal mode')) {
+      if (isEn) return `✂️ Cutting Mode: Turns all measurement boxes into large, high-contrast amber displays for clear table visibility. Click again to return to Normal Mode.`;
+      if (isSd) return `✂️ ڪٽنگ موڊ: هي بٽڻ دٻائڻ سان ماپ جون پڙهڻيون وڏيون ۽ روشن امبر رنگ ۾ نظر اينديون ته جيئن ڪٽنگ ٽيبل تي پري کان صاف ڏسن. وري ڪلڪ سان نارمل موڊ.`;
+      return `✂️ کٹنگ موڈ: کٹنگ موڈ بٹن دبانے سے ناپ کے ہندسے بڑے اور نمایاں امبر رنگ میں نظر آتے ہیں تاکہ کٹنگ کرتے وقت دور سے واضح دکھائی دیں۔ دوبارہ کلک پر نارمل موڈ میں آ جاتا ہے۔`;
     }
 
     // Photo & OCR Feature Explanation
     if (q.includes('photo') || q.includes('فوٹو') || q.includes('پرچہ') || q.includes('تصویر') || q.includes('camera') || q.includes('کیمرہ') || q.includes('gallery') || q.includes('گیلری') || q.includes('ocr')) {
-      return isRtl
-        ? `📸 پرچہ / کپڑا فوٹو: آپ کیمرہ یا گیلری سے پرچے کی تصویر لگا کر ناپ خودکار پہچان سکتے ہیں اور گاہک کے ریکارڈ میں محفوظ رکھ سکتے ہیں۔`
-        : `📸 Photo & OCR: Attach cloth or paper slip photos from Camera/Gallery to auto-read measurements and save them securely.`;
+      if (isEn) return `📸 Photo & OCR: Attach cloth or paper slip photos from Camera/Gallery to auto-read measurements and save them securely.`;
+      if (isSd) return `📸 پرچو / تصوير: اوهان ڪيمرا يا گيلري مان تصوير کڻي ماپ پاڻمرادو پڙهي سگهو ٿا ۽ گراهڪ جي کاتي ۾ محفوظ ڪري سگهو ٿا.`;
+      return `📸 پرچہ / کپڑا فوٹو: آپ کیمرہ یا گیلری سے پرچے کی تصویر لگا کر ناپ خودکار پہچان سکتے ہیں اور گاہک کے ریکارڈ میں محفوظ رکھ سکتے ہیں۔`;
     }
 
     // App Usage / How to use
     if (q.includes('help') || q.includes('کیسے استعمال') || q.includes('طریقہ') || q.includes('usage') || q.includes('how to use')) {
-      return isRtl
-        ? `آزاد ماسٹر ایپ کا مختصر طریقہ:\n1. ➕ بٹن دبا کر نیا گاہک اور ناپ درج کریں۔\n2. ✂️ کٹنگ موڈ سے ناپ بڑی سکرین پر دیکھیں۔\n3. 📄 پرچی دیکھیں یا واٹس ایپ پر ایک کلک سے بھیجیں۔`
-        : `Azad Master App Quick Guide:\n1. Tap ➕ to add customer & measurements.\n2. Tap ✂️ Cutting Mode for large visible numbers.\n3. View digital slip or share on WhatsApp.`;
+      if (isEn) return `Azad Master App Quick Guide:\n1. Tap ➕ to add customer & measurements.\n2. Tap ✂️ Cutting Mode for large visible numbers.\n3. View digital slip or share on WhatsApp.`;
+      if (isSd) return `آزاد ماسٽر ايپ جو طريقو:\n1. ➕ بٽڻ دٻائي نئون گراهڪ ۽ ماپ لکو.\n2. ✂️ ڪٽنگ موڊ سان وڏا اکر ڏسو.\n3. 📄 ڊجيٽل سلپ واٽس ايپ تي موڪليو.`;
+      return `آزاد ماسٹر ایپ کا مختصر طریقہ:\n1. ➕ بٹن دبا کر نیا گاہک اور ناپ درج کریں۔\n2. ✂️ کٹنگ موڈ سے ناپ بڑی سکرین پر دیکھیں۔\n3. 📄 پرچی دیکھیں یا واٹس ایپ پر ایک کلک سے بھیجیں۔`;
     }
 
-    if (q.includes('کپڑا') || q.includes('fabric') || q.includes('cloth') || q.includes('meter')) {
-      return isRtl 
-        ? `سوٹ کے کپڑے کا حساب کتاب (Gents Suit):\n- عام قد (40-42 انچ لمبائی): 4 میٹر (چھوٹا بر) یا 2.25 گز (بڑا پنا / 54 انچ بر) کافی ہوتا ہے۔\n- زیادہ قد (44+ لمبائی یا 44+ چھاتی): 4.25 سے 4.5 میٹر درکار ہو گا۔\n- کرتا شلوار کے لیے عام طور پر 4 گز لگتی ہے۔`
-        : `Gents Suit Fabric Estimation:\n- Standard height (40"-42" length): 4.0 meters (standard 36" width) or 2.25 meters (double width 58").\n- Tall/Broad build (44"+ length or 44"+ chest): 4.25 to 4.5 meters.\n- Always add 2-3 inches extra for margin shrinkage after washing.`;
+    if (q.includes('کپڑا') || q.includes('ڪپڙو') || q.includes('fabric') || q.includes('cloth') || q.includes('meter')) {
+      if (isEn) return `Gents Suit Fabric Estimation:\n- Standard height (40"-42" length): 4.0 meters (standard 36" width) or 2.25 meters (double width 58").\n- Tall/Broad build (44"+ length or 44"+ chest): 4.25 to 4.5 meters.\n- Always add 2-3 inches extra for margin shrinkage after washing.`;
+      if (isSd) return `مردن جي سوٽ جو ڪپڙو:\n- عام قد (40-42 انچ لمبائي): 4 ميٽر (ننڍو بر) يا سوا 2 گز (وڏو پنو).\n- ڊگهو قد (44+ لمبائي): 4.25 کان 4.5 ميٽر گهربل هوندو.`;
+      return `سوٹ کے کپڑے کا حساب کتاب (Gents Suit):\n- عام قد (40-42 انچ لمبائی): 4 میٹر (چھوٹا بر) یا 2.25 گز (بڑا پنا / 54 انچ بر) کافی ہوتا ہے۔\n- زیادہ قد (44+ لمبائی یا 44+ چھاتی): 4.25 سے 4.5 میٹر درکار ہو گا۔\n- کرتا شلوار کے لیے عام طور پر 4 گز لگتی ہے۔`;
     }
 
-    if (q.includes('تیرا') || q.includes('shoulder') || q.includes('armhole') || q.includes('آرم ہول') || q.includes('ہول')) {
-      return isRtl
-        ? `تیرا اور آرم ہول کا سنہری اصول:\n- اگر تیرا 18 انچ ہے تو کٹنگ میں ادھا انچ سلائی کا دباؤ شامل کر کے 19 انچ (ہاف 9.5) کٹ کریں۔\n- شولڈر ڈاؤن (کندھے کی ڈھلوان) عام طور پر 1.75 انچ (پونے دو انچ) رکھی جاتی ہے۔\n- آرم ہول گہرائی = چھاتی / 4 میں سے 1 انچ کم (مثلاً 38 چھاتی کے لیے ساڑھے 8 انچ)۔`
-        : `Shoulder & Armhole Master Rule:\n- For an 18" finished shoulder, cut at 19" (half 9.5") including 1/2" seam allowances.\n- Shoulder slope / drop: standard 1.75 inches for gents.\n- Armhole depth formula: (Chest ÷ 4) minus 0.5" to 1" for regular fit.`;
+    if (q.includes('تیرا') || q.includes('ٽيرو') || q.includes('shoulder') || q.includes('armhole') || q.includes('آرم ہول') || q.includes('ہول')) {
+      if (isEn) return `Shoulder & Armhole Master Rule:\n- For an 18" finished shoulder, cut at 19" (half 9.5") including 1/2" seam allowances.\n- Shoulder slope / drop: standard 1.75 inches for gents.\n- Armhole depth formula: (Chest ÷ 4) minus 0.5" to 1" for regular fit.`;
+      if (isSd) return `ٽيرو ۽ آرم هول جو فارمولو:\n- جيڪڏهن ٽيرو 18 انچ تيار هجي ته سلائي جو دٻاءُ شامل ڪري 19 انچ (اڌ 9.5) ڪٽيو.\n- ڪلهي جو لاڙو (drop) پونا ٻه انچ (1.75) رکو.\n- آرم هول اونهائي = ڇاتي / 4 مان اڌ يا هڪ انچ گهٽ.`;
+      return `تیرا اور آرم ہول کا سنہری اصول:\n- اگر تیرا 18 انچ ہے تو کٹنگ میں ادھا انچ سلائی کا دباؤ شامل کر کے 19 انچ (ہاف 9.5) کٹ کریں۔\n- شولڈر ڈاؤن (کندھے کی ڈھلوان) عام طور پر 1.75 انچ (پونے دو انچ) رکھی جاتی ہے۔\n- آرم ہول گہرائی = چھاتی / 4 میں سے 1 انچ کم (مثلاً 38 چھاتی کے لیے ساڑھے 8 انچ)۔`;
     }
 
-    if (q.includes('کالر') || q.includes('بین') || q.includes('collar') || q.includes('ban')) {
-      return isRtl
-        ? `بین اور کالر کا پیمانہ:\n- مکمل بین کے لیے گلے کا ہالہ (Hala) قمیض پر بین کے اصل سائز سے پون انچ کم کاٹیں، تاکہ پریسنگ کے وقت بین ٹھیک بیٹھے۔\n- ہاف بین یا کٹ بین: عام طور پر 14 سے 16 انچ ہوتا ہے اور چوڑائی 1 انچ یا سوا انچ رکھی جاتی ہے۔`
-        : `Collar & Ban Fitting Tips:\n- Neck hole (Hala) should be cut 0.5" to 0.75" tighter than the finished collar circumference, then notched to fit smoothly.\n- Standard ban height: 1" to 1.25" for classic gents elegance.`;
+    if (q.includes('کالر') || q.includes('بین') || q.includes('ڪالر') || q.includes('بين') || q.includes('collar') || q.includes('ban')) {
+      if (isEn) return `Collar & Ban Fitting Tips:\n- Neck hole (Hala) should be cut 0.5" to 0.75" tighter than the finished collar circumference, then notched to fit smoothly.\n- Standard ban height: 1" to 1.25" for classic gents elegance.`;
+      if (isSd) return `ڪالر ۽ بين جو حساب:\n- بين لاءِ ڳچيءَ جو هالو قميص تي اصل بين کان پون انچ ننڍو ڪٽيو ته جيئن پريسنگ بعد صحيح بيهي.\n- هاف بين يا ڪٽ بين 14 کان 16 انچ ٿيندو آهي.`;
+      return `بین اور کالر کا پیمانہ:\n- مکمل بین کے لیے گلے کا ہالہ (Hala) قمیض پر بین کے اصل سائز سے پون انچ کم کاٹیں، تاکہ پریسنگ کے وقت بین ٹھیک بیٹھے۔\n- ہاف بین یا کٹ بین: عام طور پر 14 سے 16 انچ ہوتا ہے اور چوڑائی 1 انچ یا سوا انچ رکھی جاتی ہے۔`;
     }
 
     if (q.includes('دامن') || q.includes('daaman') || q.includes('round')) {
-      return isRtl
-        ? `گول دامن کاٹنے کا طریقہ:\n- دامن کی سائیڈ چاک سے نیچے 1.5 انچ سے 2 انچ پر گولائی کا نشان لگائیں۔\n- گولائی کٹ کرتے وقت ایک جیسا کریو (curve) رکھیں تاکہ استری کرتے وقت جھول نہ آئے۔`
-        : `Round Daaman (Hem) Guide:\n- Mark curve 1.75" up from the bottom corner at the side slit.\n- Use a French curve or circular template for symmetry on front and back panels.`;
+      if (isEn) return `Round Daaman (Hem) Guide:\n- Mark curve 1.75" up from the bottom corner at the side slit.\n- Use a French curve or circular template for symmetry on front and back panels.`;
+      return `گول دامن کاٹنے کا طریقہ:\n- دامن کی سائیڈ چاک سے نیچے 1.5 انچ سے 2 انچ پر گولائی کا نشان لگائیں۔\n- گولائی کٹ کرتے وقت ایک جیسا کریو (curve) رکھیں تاکہ استری کرتے وقت جھول نہ آئے۔`;
     }
 
-    return isRtl
-      ? `شکریہ ماسٹر صاحب! میں آپ کے ہر ناپ کو صحیح خانے میں رکھوں گا اور بغیر تصدیق کے محفوظ نہیں کروں گا۔`
-      : `Thank you! Azad AI Assistant keeps your tailoring workshop organized without altering your field names.`;
+    const callerTitle = masterName?.trim() || (isRtl ? (currentLang === 'sd' ? 'استاد صاحب' : 'ماسٹر صاحب') : 'Master Tailor');
+    if (isEn) return `Thank you ${callerTitle}! I am here to help you manage measurements accurately.`;
+    if (isSd) return `مهرباني ${callerTitle}! مان اوهان جي ماپ کي ترتيب ڏئي محفوظ ڪرڻ لاءِ تيار آهيان.`;
+    if (isHi) return `धन्यवाद ${callerTitle}! मैं आपकी नाप को सही रूप से व्यवस्थित रखने के लिए तैयार हूँ।`;
+    return `شکریہ ${callerTitle}! میں آپ کے ہر ناپ کو صحیح خانے میں رکھوں گا اور بغیر تصدیق کے محفوظ نہیں کروں گا۔`;
   };
 
   const handleMicClick = () => {
@@ -250,7 +330,7 @@ export const ChatbotModal: React.FC<ChatbotModalProps> = ({
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
         recognitionRef.current = recognition;
-        recognition.lang = isRtl ? 'ur-PK' : 'en-US';
+        recognition.lang = getSpeechLangCode();
         recognition.continuous = false;
         recognition.interimResults = false;
 
@@ -305,7 +385,10 @@ export const ChatbotModal: React.FC<ChatbotModalProps> = ({
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text.trim() })
+        body: JSON.stringify({ 
+          message: text.trim(),
+          language: currentLang || (isRtl ? 'ur' : 'en')
+        })
       });
 
       const data = await response.json();
@@ -324,7 +407,7 @@ export const ChatbotModal: React.FC<ChatbotModalProps> = ({
 
       // agar speaker ON hai to jawab bol kar sunao
       if (voiceReplyOn) {
-        speakText(botReply, isRtl ? 'ur-PK' : 'en-US');
+        speakText(botReply, getSpeechLangCode());
       }
     } catch {
       const fallbackReply = getTailorAnswer(text);
@@ -339,7 +422,7 @@ export const ChatbotModal: React.FC<ChatbotModalProps> = ({
 
       // agar speaker ON hai to jawab bol kar sunao
       if (voiceReplyOn) {
-        speakText(fallbackReply, isRtl ? 'ur-PK' : 'en-US');
+        speakText(fallbackReply, getSpeechLangCode());
       }
     } finally {
       setIsTyping(false);
@@ -724,6 +807,7 @@ export const ChatbotModal: React.FC<ChatbotModalProps> = ({
           <VoiceConversationScreen
             onClose={() => setShowVoiceMode(false)}
             isRtl={isRtl}
+            currentLang={currentLang}
             onApplyMeasurements={onApplyMeasurements}
             onNewMessageFromVoice={handleNewMessageFromVoice}
             masterName={masterName}

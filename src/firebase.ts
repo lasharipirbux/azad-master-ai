@@ -105,70 +105,87 @@ export interface FirebaseAppConfig {
   firestoreDatabaseId?: string;
 }
 
+function isValidApiKey(val: any): boolean {
+  if (!val || typeof val !== 'string') return false;
+  const trimmed = val.trim();
+  if (
+    trimmed.includes('Placeholder') ||
+    trimmed.includes('YOUR_') ||
+    trimmed.includes('UNCONFIGURED') ||
+    trimmed === 'AIzaSyAzadMasterPlaceholderKey'
+  ) {
+    return false;
+  }
+  return trimmed.startsWith('AIzaSy') && trimmed.length > 20;
+}
+
 /**
- * Securely loads Firebase configuration from process.env / window.env with clean fallback
- * to firebase-applet-config.json and emits clear diagnostic warnings instead of crashing.
+ * Securely loads Firebase configuration from firebase-applet-config.json and process.env / window.env
+ * with clean fallback to provisioned credentials.
  */
 export function loadFirebaseConfig(): FirebaseAppConfig {
   const rawConfig = (firebaseConfig as Record<string, any>) || {};
 
-  const apiKey = getRuntimeEnv([
+  const rawApiKey = rawConfig.apiKey;
+  const envApiKey = getRuntimeEnv([
     'NEXT_PUBLIC_FIREBASE_API_KEY',
     'REACT_APP_FIREBASE_API_KEY',
     'VITE_FIREBASE_API_KEY',
     'FIREBASE_API_KEY',
     'API_KEY'
-  ]) || rawConfig.apiKey || '';
+  ]);
 
-  const authDomain = getRuntimeEnv([
+  const apiKey = (isValidApiKey(rawApiKey) ? rawApiKey : (isValidApiKey(envApiKey) ? envApiKey : (rawApiKey || envApiKey || ''))).trim();
+
+  const authDomain = (rawConfig.authDomain || getRuntimeEnv([
     'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
     'REACT_APP_FIREBASE_AUTH_DOMAIN',
     'VITE_FIREBASE_AUTH_DOMAIN',
     'FIREBASE_AUTH_DOMAIN'
-  ]) || rawConfig.authDomain || 'azad-master.firebaseapp.com';
+  ]) || 'empyrean-rigging-4lcf1.firebaseapp.com').trim();
 
-  const projectId = getRuntimeEnv([
+  const projectId = (rawConfig.projectId || getRuntimeEnv([
     'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
     'REACT_APP_FIREBASE_PROJECT_ID',
     'VITE_FIREBASE_PROJECT_ID',
     'FIREBASE_PROJECT_ID'
-  ]) || rawConfig.projectId || 'azad-master';
+  ]) || 'empyrean-rigging-4lcf1').trim();
 
-  const storageBucket = getRuntimeEnv([
+  const storageBucket = (rawConfig.storageBucket || getRuntimeEnv([
     'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET',
     'REACT_APP_FIREBASE_STORAGE_BUCKET',
     'VITE_FIREBASE_STORAGE_BUCKET',
     'FIREBASE_STORAGE_BUCKET'
-  ]) || rawConfig.storageBucket || 'azad-master.firebasestorage.app';
+  ]) || 'empyrean-rigging-4lcf1.firebasestorage.app').trim();
 
-  const messagingSenderId = getRuntimeEnv([
+  const messagingSenderId = (rawConfig.messagingSenderId || getRuntimeEnv([
     'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
     'REACT_APP_FIREBASE_MESSAGING_SENDER_ID',
     'VITE_FIREBASE_MESSAGING_SENDER_ID',
     'FIREBASE_MESSAGING_SENDER_ID'
-  ]) || rawConfig.messagingSenderId || '';
+  ]) || '233024949239').trim();
 
-  const appId = getRuntimeEnv([
+  const appId = (rawConfig.appId || getRuntimeEnv([
     'NEXT_PUBLIC_FIREBASE_APP_ID',
     'REACT_APP_FIREBASE_APP_ID',
     'VITE_FIREBASE_APP_ID',
     'FIREBASE_APP_ID'
-  ]) || rawConfig.appId || '';
+  ]) || '').trim();
 
-  const firestoreDatabaseId = getRuntimeEnv([
+  const firestoreDatabaseId = rawConfig.firestoreDatabaseId || getRuntimeEnv([
     'NEXT_PUBLIC_FIREBASE_DATABASE_ID',
     'REACT_APP_FIREBASE_DATABASE_ID',
     'VITE_FIREBASE_DATABASE_ID',
     'FIREBASE_DATABASE_ID'
-  ]) || rawConfig.firestoreDatabaseId || '(default)';
+  ]) || '(default)';
 
   // Validate critical keys and emit clear fallback warnings instead of hard-crashing
   const missingKeys: string[] = [];
-  if (!apiKey || apiKey.includes('Placeholder') || apiKey.includes('YOUR_') || apiKey === 'AIzaSyAzadMasterPlaceholderKey') {
-    missingKeys.push('API Key (process.env.NEXT_PUBLIC_FIREBASE_API_KEY / REACT_APP_FIREBASE_API_KEY / FIREBASE_API_KEY)');
+  if (!isValidApiKey(apiKey)) {
+    missingKeys.push('API Key (Valid Web App API Key in firebase-applet-config.json)');
   }
   if (!projectId || projectId.includes('YOUR_')) {
-    missingKeys.push('Project ID (process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID / FIREBASE_PROJECT_ID)');
+    missingKeys.push('Project ID (Valid Project ID in firebase-applet-config.json)');
   }
 
   if (missingKeys.length > 0) {
@@ -176,7 +193,7 @@ export function loadFirebaseConfig(): FirebaseAppConfig {
       `[Firebase Security & Config Notice]\n` +
       `Firebase configuration is missing valid credentials or using placeholders:\n` +
       missingKeys.map(k => `  • ${k}`).join('\n') + `\n` +
-      `To connect to your cloud database and enable Google Sign-In, please configure these variables in your environment (e.g. Vercel Project Settings > Environment Variables) or update firebase-applet-config.json.\n` +
+      `To connect to your cloud database and enable Google Sign-In, please ensure firebase-applet-config.json contains valid credentials.\n` +
       `The app is running safely in offline mode with fallback configurations.`
     );
   }
@@ -207,9 +224,9 @@ function initializeFirebaseApp(): FirebaseApp {
   } catch (initErr) {
     console.warn("[Firebase] Initialized with fallback parameters due to initialization error:", initErr);
     return initializeApp({
-      apiKey: "AIzaSy_UNCONFIGURED_KEY_SAFE_FALLBACK",
-      projectId: activeFirebaseConfig.projectId || "azad-master",
-      authDomain: activeFirebaseConfig.authDomain || "azad-master.firebaseapp.com"
+      apiKey: activeFirebaseConfig.apiKey || "AIzaSy_UNCONFIGURED_KEY_SAFE_FALLBACK",
+      projectId: activeFirebaseConfig.projectId || "empyrean-rigging-4lcf1",
+      authDomain: activeFirebaseConfig.authDomain || "empyrean-rigging-4lcf1.firebaseapp.com"
     });
   }
 }

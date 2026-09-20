@@ -319,7 +319,7 @@ export const CustomDrawerMenu: React.FC<CustomDrawerMenuProps> = ({
 
           {/* Language Selector Dropdown List */}
           {showLangPicker && (
-            <div className="px-2.5 py-2 bg-[#f0faf4] rounded-xl border border-[#128c7e]/25 space-y-1.5 my-1 animate-in fade-in duration-100">
+            <div className="px-2.5 py-2 bg-[#f0faf4] rounded-xl border border-[#128c7e]/25 space-y-2 my-1 animate-in fade-in duration-100">
               <select
                 id="drawer-language-select"
                 value={currentLang}
@@ -338,6 +338,30 @@ export const CustomDrawerMenu: React.FC<CustomDrawerMenuProps> = ({
                   </option>
                 ))}
               </select>
+
+              <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pt-1 pr-1 custom-scrollbar">
+                {languageList.map((l) => (
+                  <button
+                    key={l.code}
+                    type="button"
+                    onClick={() => {
+                      if (onChangeLanguage) {
+                        onChangeLanguage(l.code as SupportedLanguage);
+                      }
+                      setShowLangPicker(false);
+                      onClose();
+                    }}
+                    className={`px-2 py-1.5 rounded-lg text-[11px] font-bold text-left rtl:text-right flex items-center justify-between border transition-all cursor-pointer ${
+                      currentLang === l.code
+                        ? 'bg-[#075e54] text-white border-[#075e54] shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-[#e7f7ef]'
+                    }`}
+                  >
+                    <span className="truncate">{l.nativeName}</span>
+                    <span className="text-xs shrink-0">{l.flag}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 

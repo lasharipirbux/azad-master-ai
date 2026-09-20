@@ -32,15 +32,33 @@ export function speakText(
   utterance.pitch = 1.0;
 
   const voices = window.speechSynthesis.getVoices();
-  // Try finding Urdu, Hindi (which understands Urdu phonetics well), or regional Pakistani/Indian English
-  const targetLang = lang.toLowerCase();
-  let voice = voices.find(v => v.lang.toLowerCase().includes('ur') || v.lang.toLowerCase().includes('pk'));
-  if (!voice) {
-    voice = voices.find(v => v.lang.toLowerCase().includes('hi') || v.lang.toLowerCase().includes('in'));
+  const targetLang = (lang || 'ur-PK').toLowerCase();
+  
+  let voice: SpeechSynthesisVoice | undefined;
+
+  if (targetLang.startsWith('en')) {
+    // English priority
+    voice = voices.find(v => v.lang.toLowerCase() === 'en-us') ||
+            voices.find(v => v.lang.toLowerCase() === 'en-gb') ||
+            voices.find(v => v.lang.toLowerCase().startsWith('en'));
+  } else if (targetLang.startsWith('hi')) {
+    // Hindi priority
+    voice = voices.find(v => v.lang.toLowerCase().includes('hi')) ||
+            voices.find(v => v.lang.toLowerCase().includes('in'));
+  } else if (targetLang.startsWith('sd') || targetLang.startsWith('ur')) {
+    // Sindhi / Urdu priority
+    voice = voices.find(v => v.lang.toLowerCase().includes('ur') || v.lang.toLowerCase().includes('pk')) ||
+            voices.find(v => v.lang.toLowerCase().includes('sd')) ||
+            voices.find(v => v.lang.toLowerCase().includes('hi'));
+  } else if (targetLang.startsWith('ar')) {
+    voice = voices.find(v => v.lang.toLowerCase().startsWith('ar'));
+  } else {
+    // Generic match by language code prefix
+    const prefix = targetLang.split(/[-_]/)[0];
+    voice = voices.find(v => v.lang.toLowerCase().startsWith(prefix));
   }
-  if (!voice) {
-    voice = voices.find(v => v.lang.toLowerCase().includes('en-in') || v.lang.toLowerCase().includes('ar'));
-  }
+
+  // Fallback to any voice available if no match
   if (!voice && voices.length > 0) {
     voice = voices.find(v => v.lang.toLowerCase().startsWith('en')) || voices[0];
   }

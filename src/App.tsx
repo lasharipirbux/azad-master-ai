@@ -1349,6 +1349,7 @@ export default function AzadMasterFinalApp() {
             onClose={() => setShowChatbot(false)}
             translations={t}
             isRtl={isRtl}
+            currentLang={currentLang}
             onApplyMeasurements={handleApplyMeasurementsFromAI}
             masterName={effectiveTailorName}
           />
