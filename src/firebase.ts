@@ -171,45 +171,44 @@ export function isFirebaseApiKeyValid(): boolean {
 export function getAuthErrorMessage(error: any, isRtl: boolean = true): string {
   const code = error?.code || '';
   const message = error?.message || '';
+  const currentHostname = typeof window !== 'undefined' ? window.location.hostname : '';
 
-  if (
-    code === 'auth/unauthorized-domain'
-  ) {
-    return isRtl 
-      ? 'یہ ڈومین Firebase Console میں مجاز نہیں ہے۔ براہ کرم نئی ٹیب میں کھولیں یا Authentication > Settings > Authorized Domains چیک کریں۔' 
-      : 'This domain is not authorized in Firebase Console. Please open in a new tab or add to Authorized Domains.';
-  }
+  let detail = '';
 
-  if (
-    code === 'auth/popup-blocked' ||
-    code === 'auth/cancelled-popup-request'
-  ) {
-    return isRtl 
-      ? 'براؤزر نے پاپ اپ بلاک کر دیا۔ براہ کرم پاپ اپ کی اجازت دیں یا "ری ڈائریکٹ لاگ ان" آزمائیں۔'
-      : 'Popup was blocked by browser. Please allow popups or use "Try Redirect Login".';
-  }
-
-  if (code === 'auth/network-request-failed') {
-    return isRtl 
-      ? 'نیٹ ورک یا آئی فریم رکاوٹ۔ براہ کرم نیچے "نئی ٹیب میں ایپ کھولیں" یا ری ڈائریکٹ لاگ ان آزمائیں۔'
-      : 'Network or iframe restriction. Please click "Open in New Tab" below or try Redirect Login.';
-  }
-
-  if (code === 'auth/popup-closed-by-user') {
-    return isRtl ? 'لاگ ان پاپ اپ بند کر دیا گیا۔ دوبارہ کوشش کریں۔' : 'Sign-in popup was closed. Please try again.';
-  }
-
-  if (
+  if (code === 'auth/unauthorized-domain') {
+    detail = isRtl 
+      ? `ڈومین "${currentHostname}" فائر بیس کنسول کے مجاز ڈومینز (Authorized Domains) میں درج نہیں ہے۔ براہ کرم Firebase Console > Authentication > Settings > Authorized Domains میں جائیں اور "${currentHostname}" شامل کریں۔` 
+      : `Domain "${currentHostname}" is not authorized. Please add "${currentHostname}" in Firebase Console > Authentication > Settings > Authorized Domains.`;
+  } else if (code === 'auth/operation-not-allowed') {
+    detail = isRtl
+      ? 'فائر بیس کنسول میں Google Sign-in فعال (Enabled) نہیں ہے۔ براہ کرم Firebase Console > Authentication > Sign-in method میں جا کر Google کو Enable کریں۔'
+      : 'Google Sign-in is not enabled in Firebase Console. Please enable Google provider under Authentication > Sign-in method.';
+  } else if (code === 'auth/popup-blocked' || code === 'auth/cancelled-popup-request') {
+    detail = isRtl 
+      ? 'براؤزر نے پاپ اپ ونڈو بلاک کر دی۔ براہ کرم نیچے "Google ری ڈائریکٹ لاگ ان" کا بٹن استعمال کریں یا براؤزر میں پاپ اپ کی اجازت دیں۔'
+      : 'Sign-in popup was blocked by the browser. Please click "Sign in with Google (Redirect)" below or allow popups.';
+  } else if (code === 'auth/network-request-failed') {
+    detail = isRtl 
+      ? 'انٹرنیٹ یا آئی فریم (iFrame) کی وجہ سے گوگل کنکشن بلاک ہوا۔ براہ کرم "نئی ونڈو میں ایپ کھولیں" یا ری ڈائریکٹ لاگ ان آزمائیں۔'
+      : 'Network or iframe restriction. Please open the app in a new browser tab or use Redirect Login.';
+  } else if (code === 'auth/popup-closed-by-user') {
+    detail = isRtl 
+      ? 'لاگ ان ونڈو مکمل ہونے سے پہلے بند کر دی گئی۔ براہ کرم دوبارہ کوشش کریں۔' 
+      : 'Sign-in window was closed before completing. Please try again.';
+  } else if (
     code === 'auth/api-key-not-valid' ||
     code === 'auth/invalid-api-key' ||
     message.includes('api-key-not-valid')
   ) {
-    return isRtl
-      ? 'فائر بیس گوگل لاگ ان تصدیق میں مسئلہ۔ براہ کرم نئی ونڈو میں کوشش کریں۔'
-      : 'Firebase authentication check failed. Please try opening in a new window.';
+    detail = isRtl
+      ? 'فائر بیس API Key کی توثیق نہیں ہو سکی۔ براہ کرم نئی ونڈو میں کوشش کریں۔'
+      : 'Firebase API key validation failed. Please try in a new window.';
+  } else {
+    detail = message || (isRtl ? 'گوگل لاگ ان میں خرابی پیش آئی۔' : 'An error occurred during Google sign-in.');
   }
 
-  return message || (isRtl ? 'گوگل لاگ ان میں خرابی آئی۔ براہ کرم دوبارہ کوشش کریں۔' : 'Google sign-in failed. Please try again.');
+  // Always return the error code prominently so tailor/developer can see exact cause
+  return code ? `[${code}] ${detail}` : detail;
 }
 
 // Connection test helper

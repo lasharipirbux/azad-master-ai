@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Customer, CustomerMeasurements, SupportedLanguage, OrderStatus } from './types';
 import { translations, languageList } from './data/translations';
 import { useLanguage } from './context/LanguageContext';
-import { useLanguage } from './context/LanguageContext';
 import { DigitalSlipModal } from './components/DigitalSlipModal';
 import { AddMeasurementModal } from './components/AddMeasurementModal';
 import { ChatbotModal } from './components/ChatbotModal';
@@ -181,9 +180,20 @@ export default function AzadMasterFinalApp() {
     let unsubscribeFirestore: (() => void) | null = null;
 
     // Check if user returned from a redirect sign-in
-    checkRedirectAuthResult().catch((err) => {
-      console.warn("Redirect check:", err);
-    });
+    checkRedirectAuthResult()
+      .then((user) => {
+        if (user) {
+          setCurrentUser(user);
+          setIsLoggedIn(true);
+          setIsLoadingAuth(false);
+          setAuthError(null);
+        }
+      })
+      .catch((err: any) => {
+        console.error("Google redirect sign-in check error:", err);
+        setAuthError(getAuthErrorMessage(err, isRtl));
+        setIsLoadingAuth(false);
+      });
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -377,7 +387,7 @@ export default function AzadMasterFinalApp() {
     }
   };
 
-  // Real Google Sign-in Handler
+  // Real Google Sign-in Handler (Popup with auto-fallback to Redirect if popup is blocked)
   const handleGoogleLogin = async () => {
     setAuthError(null);
     setIsLoadingAuth(true);
@@ -386,11 +396,27 @@ export default function AzadMasterFinalApp() {
       // onAuthStateChanged will handle setting the state and user
     } catch (err: any) {
       console.error("Google Sign-In Error:", err);
-      setAuthError(getAuthErrorMessage(err, isRtl));
+      // If popup was blocked or failed due to browser restrictions, fallback automatically to redirect
+      if (
+        err?.code === 'auth/popup-blocked' ||
+        err?.code === 'auth/cancelled-popup-request'
+      ) {
+        try {
+          console.log("Popup blocked by browser. Automatically trying Google Redirect...");
+          await signInWithGoogleRedirect();
+          return;
+        } catch (redirectErr: any) {
+          console.error("Google Redirect Fallback Error:", redirectErr);
+          setAuthError(getAuthErrorMessage(redirectErr, isRtl));
+        }
+      } else {
+        setAuthError(getAuthErrorMessage(err, isRtl));
+      }
       setIsLoadingAuth(false);
     }
   };
 
+  // Dedicated Direct Google Redirect Sign-in Handler
   const handleGoogleRedirectLogin = async () => {
     setAuthError(null);
     setIsLoadingAuth(true);
@@ -685,35 +711,52 @@ export default function AzadMasterFinalApp() {
             </p>
           </div>
 
-          {/* Error Message Display with Recovery Actions */}
+          {/* High Visibility Error Message Display with Recovery Actions */}
           {authError && (
-            <div className="mb-3 p-3 bg-rose-50 border border-rose-300 rounded-xl text-rose-800 text-xs flex flex-col gap-2.5 text-left rtl:text-right animate-in fade-in">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
-                <div className="flex-1 font-medium leading-relaxed">
-                  <span>{authError}</span>
+            <div 
+              id="auth-error-alert-banner"
+              role="alert"
+              className="mb-4 p-3.5 bg-rose-50 border-2 border-rose-500 rounded-xl text-rose-900 text-xs flex flex-col gap-2.5 text-left rtl:text-right animate-in fade-in shadow-md"
+            >
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-rose-600 animate-pulse" />
+                <div className="flex-1 space-y-1">
+                  <div className="font-extrabold text-rose-950 text-sm flex items-center gap-1.5">
+                    <span>{isRtl ? '⚠️ لاگ ان میں رکاوٹ (Google Sign-in Alert)' : '⚠️ Sign-in Error Alert'}</span>
+                  </div>
+                  <p className="font-semibold text-rose-900 leading-relaxed text-[12px] whitespace-pre-wrap break-words">
+                    {authError}
+                  </p>
                 </div>
               </div>
               
-              {/* Recovery Actions for iframe / network block */}
-              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-rose-200/80">
+              {/* Recovery Actions for iframe / popup block */}
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-rose-200">
+                <button
+                  type="button"
+                  id="error-try-redirect-btn"
+                  onClick={handleGoogleRedirectLogin}
+                  disabled={isLoadingAuth}
+                  className="px-3 py-1.5 bg-[#075e54] hover:bg-[#064e46] text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition-transform active:scale-95 cursor-pointer"
+                >
+                  <LogIn className="w-3.5 h-3.5 text-amber-300" />
+                  <span>{isRtl ? 'Google ری ڈائریکٹ آزمائیں' : 'Try Redirect Login'}</span>
+                </button>
                 <a 
                   href={window.location.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-2.5 py-1.5 bg-white hover:bg-rose-100 text-[#075e54] font-bold rounded-lg border border-slate-300 text-[11px] flex items-center gap-1 shadow-2xs transition-colors"
+                  className="px-3 py-1.5 bg-white hover:bg-rose-100 text-[#075e54] font-bold rounded-lg border border-slate-300 text-xs flex items-center gap-1.5 shadow-xs transition-colors"
                 >
-                  <ExternalLink className="w-3 h-3 text-[#25d366]" />
-                  <span>{t.openInNewTab || (isRtl ? 'نئی ٹیب میں ایپ کھولیں' : 'Open in New Tab')}</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-[#25d366]" />
+                  <span>{isRtl ? 'نئی ونڈو میں ایپ کھولیں' : 'Open in New Window'}</span>
                 </a>
                 <button
                   type="button"
-                  onClick={handleGoogleRedirectLogin}
-                  disabled={isLoadingAuth}
-                  className="px-2.5 py-1.5 bg-[#075e54] hover:bg-[#064e46] text-white font-bold rounded-lg text-[11px] flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                  onClick={() => setAuthError(null)}
+                  className="px-2 py-1 text-slate-500 hover:text-slate-800 text-xs cursor-pointer hover:underline"
                 >
-                  <LogIn className="w-3 h-3 text-amber-300" />
-                  <span>{t.tryRedirectLogin || (isRtl ? 'ری ڈائریکٹ لاگ ان آزمائیں' : 'Try Redirect Login')}</span>
+                  {isRtl ? 'صاف کریں' : 'Dismiss'}
                 </button>
               </div>
             </div>
@@ -768,7 +811,7 @@ export default function AzadMasterFinalApp() {
             </p>
           </div>
 
-          {/* Real Google Sign-in Button */}
+          {/* Primary: Real Google Sign-in (Popup with auto-redirect fallback) */}
           <button 
             type="button" 
             id="google-signin-btn"
@@ -779,7 +822,7 @@ export default function AzadMasterFinalApp() {
             {isLoadingAuth ? (
               <>
                 <RotateCw className="w-4 h-4 animate-spin text-[#075e54]" />
-                <span>{t.signingIn}</span>
+                <span>{t.signingIn || (isRtl ? 'لاگ ان ہو رہا ہے...' : 'Signing in...')}</span>
               </>
             ) : (
               <>
@@ -790,21 +833,35 @@ export default function AzadMasterFinalApp() {
                   <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
                   <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
                 </svg>
-                <span>{t.signInWithGoogle}</span>
+                <span>{t.signInWithGoogle || (isRtl ? 'Google سے لاگ ان کریں' : 'Sign In with Google')}</span>
               </>
             )}
           </button>
 
-          {/* Quick Helper for iframe / direct access */}
+          {/* Secondary: Dedicated Google Redirect Button (Always visible) */}
+          <button 
+            type="button" 
+            id="google-redirect-btn"
+            onClick={handleGoogleRedirectLogin}
+            disabled={isLoadingAuth}
+            className="w-full mt-2.5 bg-[#f0faf4] hover:bg-[#e1f5ec] active:scale-[0.99] text-[#075e54] font-bold py-2.5 px-4 rounded-xl border border-[#128c7e]/30 shadow-2xs hover:shadow-xs transition-all text-xs flex items-center justify-center gap-2 cursor-pointer select-none"
+            title={isRtl ? 'اگر براؤزر نے پاپ اپ بلاک کیا ہو تو ری ڈائریکٹ سے لاگ ان کریں' : 'Use Redirect mode if popup is blocked by browser'}
+          >
+            <LogIn className="w-3.5 h-3.5 text-[#25d366]" />
+            <span>{isRtl ? 'Google ری ڈائریکٹ لاگ ان (Redirect Mode)' : 'Sign In with Google (Redirect Mode)'}</span>
+          </button>
+
+          {/* New Window Launcher for iFrame / Sandbox */}
           <div className="mt-3 text-center">
             <a 
               href={window.location.href}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-[#075e54] hover:text-[#128c7e] hover:underline"
+              id="open-new-window-link"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#075e54] hover:text-[#128c7e] hover:underline bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg transition-colors"
             >
-              <ExternalLink className="w-3 h-3" />
-              <span>{t.openInNewTab || (isRtl ? 'براہ راست نئی ونڈو میں کھولیں' : 'Open directly in new window')}</span>
+              <ExternalLink className="w-3.5 h-3.5 text-[#25d366]" />
+              <span>{isRtl ? 'براہ راست نئی ونڈو میں کھولیں (Recommended)' : 'Open directly in New Window (Recommended)'}</span>
             </a>
           </div>
 
