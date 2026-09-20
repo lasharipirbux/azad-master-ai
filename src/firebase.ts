@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { 
   getAuth, 
   GoogleAuthProvider,
@@ -9,7 +9,8 @@ import {
   browserLocalPersistence,
   signOut, 
   onAuthStateChanged,
-  User 
+  User,
+  AuthError
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -23,24 +24,266 @@ import {
   query, 
   where,
   doc, 
-  getDocFromServer 
+  getDocFromServer,
+  Firestore
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 import { Customer } from './types';
 
-// Firebase Initialization
-const app = initializeApp(firebaseConfig);
+// Extend window interface for runtime environment variable injection
+declare global {
+  interface Window {
+    env?: Record<string, string | undefined>;
+    __ENV__?: Record<string, string | undefined>;
+  }
+}
 
-// Use default Firestore database of the azad-master project
-export const db = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(app);
+/**
+ * Safely extracts environment variables from multiple runtime sources:
+ * 1. window.env or window.__ENV__ (Runtime injection in browser/Vercel)
+ * 2. process.env (Node / Webpack / Next.js bundler injection)
+ * 3. import.meta.env (Vite bundler injection)
+ */
+function getRuntimeEnv(keys: string[]): string | undefined {
+  // 1. Check window.env (runtime injection in production / Docker / Vercel client scripts)
+  if (typeof window !== 'undefined') {
+    const win = window as any;
+    if (win.env && typeof win.env === 'object') {
+      for (const k of keys) {
+        const val = win.env[k];
+        if (typeof val === 'string' && val.trim() !== '') return val.trim();
+      }
+    }
+    if (win.__ENV__ && typeof win.__ENV__ === 'object') {
+      for (const k of keys) {
+        const val = win.__ENV__[k];
+        if (typeof val === 'string' && val.trim() !== '') return val.trim();
+      }
+    }
+    if (win.process?.env && typeof win.process.env === 'object') {
+      for (const k of keys) {
+        const val = win.process.env[k];
+        if (typeof val === 'string' && val.trim() !== '') return val.trim();
+      }
+    }
+  }
+
+  // 2. Check global process.env (Next.js, CRA, Webpack)
+  try {
+    if (typeof process !== 'undefined' && process && process.env) {
+      for (const k of keys) {
+        const val = process.env[k];
+        if (typeof val === 'string' && val.trim() !== '') return val.trim();
+      }
+    }
+  } catch {
+    // Ignore ReferenceError or access errors
+  }
+
+  // 3. Check Vite import.meta.env
+  try {
+    if (typeof import.meta !== 'undefined' && (import.meta as any)?.env) {
+      for (const k of keys) {
+        const val = (import.meta as any).env[k];
+        if (typeof val === 'string' && val.trim() !== '') return val.trim();
+      }
+    }
+  } catch {
+    // Ignore syntax / meta errors
+  }
+
+  return undefined;
+}
+
+export interface FirebaseAppConfig {
+  apiKey: string;
+  authDomain: string;
+  projectId: string;
+  storageBucket: string;
+  messagingSenderId: string;
+  appId: string;
+  firestoreDatabaseId?: string;
+}
+
+/**
+ * Securely loads Firebase configuration from process.env / window.env with clean fallback
+ * to firebase-applet-config.json and emits clear diagnostic warnings instead of crashing.
+ */
+export function loadFirebaseConfig(): FirebaseAppConfig {
+  const rawConfig = (firebaseConfig as Record<string, any>) || {};
+
+  const apiKey = getRuntimeEnv([
+    'NEXT_PUBLIC_FIREBASE_API_KEY',
+    'REACT_APP_FIREBASE_API_KEY',
+    'VITE_FIREBASE_API_KEY',
+    'FIREBASE_API_KEY',
+    'API_KEY'
+  ]) || rawConfig.apiKey || '';
+
+  const authDomain = getRuntimeEnv([
+    'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
+    'REACT_APP_FIREBASE_AUTH_DOMAIN',
+    'VITE_FIREBASE_AUTH_DOMAIN',
+    'FIREBASE_AUTH_DOMAIN'
+  ]) || rawConfig.authDomain || 'azad-master.firebaseapp.com';
+
+  const projectId = getRuntimeEnv([
+    'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
+    'REACT_APP_FIREBASE_PROJECT_ID',
+    'VITE_FIREBASE_PROJECT_ID',
+    'FIREBASE_PROJECT_ID'
+  ]) || rawConfig.projectId || 'azad-master';
+
+  const storageBucket = getRuntimeEnv([
+    'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET',
+    'REACT_APP_FIREBASE_STORAGE_BUCKET',
+    'VITE_FIREBASE_STORAGE_BUCKET',
+    'FIREBASE_STORAGE_BUCKET'
+  ]) || rawConfig.storageBucket || 'azad-master.firebasestorage.app';
+
+  const messagingSenderId = getRuntimeEnv([
+    'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
+    'REACT_APP_FIREBASE_MESSAGING_SENDER_ID',
+    'VITE_FIREBASE_MESSAGING_SENDER_ID',
+    'FIREBASE_MESSAGING_SENDER_ID'
+  ]) || rawConfig.messagingSenderId || '';
+
+  const appId = getRuntimeEnv([
+    'NEXT_PUBLIC_FIREBASE_APP_ID',
+    'REACT_APP_FIREBASE_APP_ID',
+    'VITE_FIREBASE_APP_ID',
+    'FIREBASE_APP_ID'
+  ]) || rawConfig.appId || '';
+
+  const firestoreDatabaseId = getRuntimeEnv([
+    'NEXT_PUBLIC_FIREBASE_DATABASE_ID',
+    'REACT_APP_FIREBASE_DATABASE_ID',
+    'VITE_FIREBASE_DATABASE_ID',
+    'FIREBASE_DATABASE_ID'
+  ]) || rawConfig.firestoreDatabaseId || '(default)';
+
+  // Validate critical keys and emit clear fallback warnings instead of hard-crashing
+  const missingKeys: string[] = [];
+  if (!apiKey || apiKey.includes('Placeholder') || apiKey.includes('YOUR_') || apiKey === 'AIzaSyAzadMasterPlaceholderKey') {
+    missingKeys.push('API Key (process.env.NEXT_PUBLIC_FIREBASE_API_KEY / REACT_APP_FIREBASE_API_KEY / FIREBASE_API_KEY)');
+  }
+  if (!projectId || projectId.includes('YOUR_')) {
+    missingKeys.push('Project ID (process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID / FIREBASE_PROJECT_ID)');
+  }
+
+  if (missingKeys.length > 0) {
+    console.warn(
+      `[Firebase Security & Config Notice]\n` +
+      `Firebase configuration is missing valid credentials or using placeholders:\n` +
+      missingKeys.map(k => `  • ${k}`).join('\n') + `\n` +
+      `To connect to your cloud database and enable Google Sign-In, please configure these variables in your environment (e.g. Vercel Project Settings > Environment Variables) or update firebase-applet-config.json.\n` +
+      `The app is running safely in offline mode with fallback configurations.`
+    );
+  }
+
+  return {
+    apiKey,
+    authDomain,
+    projectId,
+    storageBucket,
+    messagingSenderId,
+    appId,
+    firestoreDatabaseId
+  };
+}
+
+// Securely load active Firebase configuration using utility function
+export const activeFirebaseConfig: FirebaseAppConfig = loadFirebaseConfig();
+
+/**
+ * Initializes Firebase App using loadFirebaseConfig with error recovery
+ */
+function initializeFirebaseApp(): FirebaseApp {
+  if (getApps().length > 0) {
+    return getApp();
+  }
+  try {
+    return initializeApp(activeFirebaseConfig);
+  } catch (initErr) {
+    console.warn("[Firebase] Initialized with fallback parameters due to initialization error:", initErr);
+    return initializeApp({
+      apiKey: "AIzaSy_UNCONFIGURED_KEY_SAFE_FALLBACK",
+      projectId: activeFirebaseConfig.projectId || "azad-master",
+      authDomain: activeFirebaseConfig.authDomain || "azad-master.firebaseapp.com"
+    });
+  }
+}
+
+// Clean Auth and Firestore instances derived directly from the initialized app instance
+export const app: FirebaseApp = initializeFirebaseApp();
 export const auth = getAuth(app);
+export const db: Firestore = activeFirebaseConfig.firestoreDatabaseId && activeFirebaseConfig.firestoreDatabaseId !== '(default)'
+  ? getFirestore(app, activeFirebaseConfig.firestoreDatabaseId)
+  : getFirestore(app);
 
 // Enable local persistence
 setPersistence(auth, browserLocalPersistence).catch((err) => {
   console.warn("Could not enable browser local persistence:", err);
 });
+
+/**
+ * Validates if the configured Firebase API key is a genuine key rather than an unconfigured placeholder
+ */
+export function isFirebaseApiKeyValid(): boolean {
+  const key = activeFirebaseConfig?.apiKey;
+  if (!key || typeof key !== 'string') return false;
+  if (
+    key.includes('Placeholder') || 
+    key.includes('YOUR_') || 
+    key.includes('UNCONFIGURED') ||
+    key === 'AIzaSyAzadMasterPlaceholderKey'
+  ) {
+    return false;
+  }
+  return key.startsWith('AIzaSy') && key.length > 20;
+}
+
+/**
+ * Helper to normalize and translate Firebase Authentication errors with friendly guidance
+ */
+export function getAuthErrorMessage(error: any, isRtl: boolean = true): string {
+  const code = error?.code || '';
+  const message = error?.message || '';
+
+  if (
+    code === 'auth/api-key-not-valid' ||
+    code === 'auth/api-key-not-valid.-please-pass-a-valid-api-key.' ||
+    code === 'auth/invalid-api-key' ||
+    message.includes('api-key-not-valid') ||
+    !isFirebaseApiKeyValid()
+  ) {
+    return isRtl
+      ? 'فائر بیس API کی درست نہیں ہے۔ براہ کرم Firebase Console سے اصل API Key حاصل کر کے firebase-applet-config.json میں یا Environment Variable (NEXT_PUBLIC_FIREBASE_API_KEY / REACT_APP_FIREBASE_API_KEY / window.env) میں سیٹ کریں۔'
+      : 'Firebase API key is invalid or placeholder. Please provide a valid Web App API Key via environment variables (process.env / window.env) or in firebase-applet-config.json.';
+  }
+
+  if (code === 'auth/unauthorized-domain') {
+    return isRtl 
+      ? 'یہ ڈومین Firebase Console میں مجاز نہیں ہے۔ براہ کرم Authentication > Settings > Authorized Domains میں شامل کریں۔' 
+      : 'This domain is not authorized in Firebase Console. Please add it in Authentication > Settings > Authorized Domains.';
+  }
+
+  if (code === 'auth/network-request-failed') {
+    return isRtl 
+      ? 'نیٹ ورک یا آئی فریم رکاوٹ (auth/network-request-failed)۔ براہ کرم نیچے "نئی ٹیب میں کھولیں" بٹن پر کلک کریں یا ری ڈائریکٹ لاگ ان کریں۔'
+      : 'Network / iframe restriction (auth/network-request-failed). Please click "Open in New Tab" below or use Redirect Sign-in.';
+  }
+
+  if (code === 'auth/popup-closed-by-user') {
+    return isRtl ? 'لاگ ان پاپ اپ بند کر دیا گیا۔ دوبارہ کوشش کریں۔' : 'Sign-in popup was closed. Please try again.';
+  }
+
+  if (code === 'auth/cancelled-popup-request') {
+    return isRtl ? 'لاگ ان درخواست منسوخ ہو گئی۔' : 'Sign-in request was cancelled.';
+  }
+
+  return message || (isRtl ? 'گوگل لاگ ان میں خرابی آئی۔ براہ کرم دوبارہ کوشش کریں۔' : 'Google sign-in failed. Please try again.');
+}
 
 // Connection test helper
 export async function testFirebaseConnection() {
@@ -64,19 +307,45 @@ export async function testFirebaseConnection() {
  * Signs in user with Google Authentication Popup
  */
 export async function signInWithGoogle(): Promise<User> {
+  if (!isFirebaseApiKeyValid()) {
+    const err: any = new Error("Firebase API key is not valid. Please pass a valid API key in firebase-applet-config.json.");
+    err.code = 'auth/api-key-not-valid';
+    throw err;
+  }
+
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
-  const result = await signInWithPopup(auth, provider);
-  return result.user;
+  try {
+    const result = await signInWithPopup(auth, provider);
+    return result.user;
+  } catch (error: any) {
+    if (error?.code?.includes('api-key-not-valid') || error?.message?.includes('api-key-not-valid')) {
+      error.code = 'auth/api-key-not-valid';
+    }
+    throw error;
+  }
 }
 
 /**
  * Signs in user with Google Redirect (useful if popups/cookies are blocked in iframe)
  */
 export async function signInWithGoogleRedirect(): Promise<void> {
+  if (!isFirebaseApiKeyValid()) {
+    const err: any = new Error("Firebase API key is not valid. Please pass a valid API key in firebase-applet-config.json.");
+    err.code = 'auth/api-key-not-valid';
+    throw err;
+  }
+
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
-  await signInWithRedirect(auth, provider);
+  try {
+    await signInWithRedirect(auth, provider);
+  } catch (error: any) {
+    if (error?.code?.includes('api-key-not-valid') || error?.message?.includes('api-key-not-valid')) {
+      error.code = 'auth/api-key-not-valid';
+    }
+    throw error;
+  }
 }
 
 /**

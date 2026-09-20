@@ -1,12 +1,12 @@
 {
   "projectId": "azad-master",
-  "appId": "1:000000000000:web:azadmasterapp",
-  "apiKey": "AIzaSyAzadMasterPlaceholderKey",
+  "appId": "1:852080705989:web:3954e671cbb73ec8784bac",
+  "apiKey": "AIzaSyDIvjXtpgGsP3AsF7DtcmrlciSlhwOmC6w",
   "authDomain": "azad-master.firebaseapp.com",
   "firestoreDatabaseId": "(default)",
   "storageBucket": "azad-master.firebasestorage.app",
-  "messagingSenderId": "000000000000",
-  "measurementId": "",
+  "messagingSenderId": "852080705989",
+  "measurementId": "G-M834JDVRL8",
   "oAuthClientId": "",
   "recaptchaSiteKey": ""
 }

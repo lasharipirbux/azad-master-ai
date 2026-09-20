@@ -26,7 +26,9 @@ import {
   syncAllCustomersToFirestore,
   testFirebaseConnection,
   saveUserProfileToFirestore,
-  getUserProfileFromFirestore
+  getUserProfileFromFirestore,
+  getAuthErrorMessage,
+  isFirebaseApiKeyValid
 } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { 
@@ -365,23 +367,7 @@ export default function AzadMasterFinalApp() {
       // onAuthStateChanged will handle setting the state and user
     } catch (err: any) {
       console.error("Google Sign-In Error:", err);
-      let msg = isRtl ? 'گوگل لاگ ان میں خرابی آئی۔ براہ کرم دوبارہ کوشش کریں۔' : 'Google sign-in failed. Please try again.';
-      if (err?.code === 'auth/network-request-failed') {
-        msg = isRtl 
-          ? 'نیٹ ورک یا آئی فریم رکاوٹ (auth/network-request-failed)۔ براہ کرم نیچے "نئی ٹیب میں کھولیں" بٹن پر کلک کریں یا ری ڈائریکٹ لاگ ان کریں۔'
-          : 'Network / iframe restriction (auth/network-request-failed). Please click "Open in New Tab" below or use Redirect Sign-in.';
-      } else if (err?.code === 'auth/popup-closed-by-user') {
-        msg = isRtl ? 'لاگ ان پاپ اپ بند کر دیا گیا۔ دوبارہ کوشش کریں۔' : 'Sign-in popup was closed. Please try again.';
-      } else if (err?.code === 'auth/cancelled-popup-request') {
-        msg = isRtl ? 'لاگ ان درخواست منسوخ ہو گئی۔' : 'Sign-in request was cancelled.';
-      } else if (err?.code === 'auth/unauthorized-domain') {
-        msg = isRtl 
-          ? 'یہ ڈومین Firebase Console میں مجاز نہیں ہے۔ براہ کرم Authorized Domains میں شامل کریں۔' 
-          : 'This domain is not authorized in Firebase Console. Please add it to Authorized Domains.';
-      } else if (err?.message) {
-        msg = err.message;
-      }
-      setAuthError(msg);
+      setAuthError(getAuthErrorMessage(err, isRtl));
       setIsLoadingAuth(false);
     }
   };
@@ -393,7 +379,7 @@ export default function AzadMasterFinalApp() {
       await signInWithGoogleRedirect();
     } catch (err: any) {
       console.error("Google Redirect Error:", err);
-      setAuthError(err?.message || (isRtl ? 'ری ڈائریکٹ لاگ ان میں مسئلہ آیا ہے۔' : 'Redirect sign-in failed.'));
+      setAuthError(getAuthErrorMessage(err, isRtl));
       setIsLoadingAuth(false);
     }
   };
@@ -681,6 +667,19 @@ export default function AzadMasterFinalApp() {
                 : 'Each tailor securely signs in with their Google account. Your customers, measurements, and accounts remain strictly private to you.'}
             </p>
           </div>
+
+          {/* Unconfigured API Key Notice */}
+          {!isFirebaseApiKeyValid() && !authError && (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs text-left rtl:text-right flex items-start gap-2 shadow-2xs">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+              <div className="leading-relaxed">
+                <span className="font-bold">{isRtl ? 'فائر بیس API کی درکار ہے:' : 'Firebase API Key Required:'}</span>{' '}
+                {isRtl 
+                  ? 'پروجیکٹ azad-master کی اصل Web App API Key درکار ہے۔ فائر بیس کنسول سے API کی حاصل کر کے firebase-applet-config.json میں شامل کریں۔' 
+                  : 'Project azad-master requires a real Web App API key from Firebase Console.'}
+              </div>
+            </div>
+          )}
 
           {/* Error Message Display with Recovery Actions */}
           {authError && (
