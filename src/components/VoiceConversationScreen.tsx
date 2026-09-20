@@ -10,6 +10,7 @@ interface VoiceConversationScreenProps {
   isRtl: boolean;
   onApplyMeasurements?: (measurements: Partial<CustomerMeasurements>) => void;
   onNewMessageFromVoice?: (userText: string, botText: string, detectedMeasurements?: Partial<CustomerMeasurements>) => void;
+  masterName?: string;
 }
 
 type ConversationState = 'idle' | 'listening' | 'processing' | 'speaking';
@@ -18,7 +19,8 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
   onClose,
   isRtl,
   onApplyMeasurements,
-  onNewMessageFromVoice
+  onNewMessageFromVoice,
+  masterName
 }) => {
   const [conversationState, setConversationState] = useState<ConversationState>('idle');
   const [userTranscript, setUserTranscript] = useState<string>('');
@@ -41,9 +43,10 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
   useEffect(() => {
     isMountedRef.current = true;
 
+    const tailorGreetingName = masterName?.trim() || (isRtl ? 'ماسٹر صاحب' : 'Master Tailor');
     const initialGreeting = isRtl
-      ? 'جی ماسٹر پیر بخش صاحب! میں سن رہا ہوں۔ آپ ناپ یا کٹنگ کا کوئی بھی سوال بول سکتے ہیں۔'
-      : 'Hello Master Pir Bakhash! I am listening. Speak your measurements or any tailoring question.';
+      ? `جی ${tailorGreetingName}! میں سن رہا ہوں۔ آپ ناپ یا کٹنگ کا کوئی بھی سوال بول سکتے ہیں۔`
+      : `Hello ${tailorGreetingName}! I am listening. Speak your measurements or any tailoring question.`;
 
     setAiResponseText(initialGreeting);
     setStatusNote(isRtl ? 'آزاد ماسٹر اسسٹنٹ بول رہا ہے...' : 'Azad Master Assistant speaking...');
@@ -186,9 +189,10 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
       const data = await response.json();
       const detected = data.parsedMeasurements || localParsed;
 
+      const callerTitle = masterName?.trim() || (isRtl ? 'ماسٹر صاحب' : 'Master');
       let replyText = data.reply || (isRtl 
-        ? "جی ماسٹر صاحب! آپ کی بات سمجھ آ گئی ہے۔" 
-        : "Got it, Master Pir Bakhash!");
+        ? `جی ${callerTitle}! آپ کی بات سمجھ آ گئی ہے۔` 
+        : `Got it, ${callerTitle}!`);
 
       if (detected && Object.keys(detected).length > 0) {
         setDetectedMeasurements(detected);

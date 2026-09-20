@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Customer, CustomerMeasurements, SupportedLanguage, OrderStatus } from './types';
 import { translations, languageList } from './data/translations';
 import { DigitalSlipModal } from './components/DigitalSlipModal';
@@ -197,7 +197,8 @@ export default function AzadMasterFinalApp() {
         // 1. Load user-specific profile
         try {
           const cloudProfile = await getUserProfileFromFirestore(user.uid);
-          if (cloudProfile && cloudProfile.name) {
+          const defaultName = user.displayName?.trim() || (isRtl ? 'ماسٹر صاحب' : 'Master Tailor');
+          if (cloudProfile && cloudProfile.name && cloudProfile.name !== 'Pir Bakhash (Master)' && cloudProfile.name !== 'Pirbux') {
             setMasterName(cloudProfile.name);
             setMasterPhoto(cloudProfile.photo || user.photoURL || null);
             setMasterPhone(cloudProfile.phone || '');
@@ -206,17 +207,19 @@ export default function AzadMasterFinalApp() {
             const localProfile = localStorage.getItem(`azad_master_profile_${user.uid}`);
             if (localProfile) {
               const parsed = JSON.parse(localProfile);
-              setMasterName(parsed.name || user.displayName || 'Master Tailor');
+              const resolved = (parsed.name && parsed.name !== 'Pir Bakhash (Master)' && parsed.name !== 'Pirbux')
+                ? parsed.name
+                : defaultName;
+              setMasterName(resolved);
               setMasterPhoto(parsed.photo || user.photoURL || null);
               setMasterPhone(parsed.phone || '');
             } else {
-              const initialName = user.displayName || 'Master Tailor';
-              setMasterName(initialName);
+              setMasterName(defaultName);
               setMasterPhoto(user.photoURL || null);
               setMasterPhone('');
-              // Initialize empty profile in Firestore
+              // Initialize profile in Firestore
               saveUserProfileToFirestore({
-                name: initialName,
+                name: defaultName,
                 photo: user.photoURL || null,
                 phone: ''
               });
@@ -224,7 +227,7 @@ export default function AzadMasterFinalApp() {
           }
         } catch (err) {
           console.warn("Could not load user profile:", err);
-          setMasterName(user.displayName || 'Master Tailor');
+          setMasterName(user.displayName?.trim() || (isRtl ? 'ماسٹر صاحب' : 'Master Tailor'));
           setMasterPhoto(user.photoURL || null);
         }
 
@@ -279,6 +282,29 @@ export default function AzadMasterFinalApp() {
       if (unsubscribeFirestore) unsubscribeFirestore();
     };
   }, []);
+
+  // Dynamically resolve tailor's display name from Firebase Auth (currentUser.displayName),
+  // custom masterName, or default to 'ماسٹر صاحب' (never a static hardcoded name)
+  const effectiveTailorName = useMemo(() => {
+    // 1. If user explicitly entered a custom masterName in settings that isn't legacy hardcoded placeholder
+    if (masterName && masterName.trim()) {
+      const trimmed = masterName.trim();
+      if (
+        trimmed !== 'Pir Bakhash (Master)' &&
+        trimmed !== 'Master Pir Bakhash' &&
+        trimmed !== 'Pirbux' &&
+        trimmed !== 'Master Tailor'
+      ) {
+        return trimmed;
+      }
+    }
+    // 2. Read dynamically from Firebase Auth currentUser.displayName (Google profile name)
+    if (currentUser?.displayName && currentUser.displayName.trim()) {
+      return currentUser.displayName.trim();
+    }
+    // 3. Fallback to 'ماسٹر صاحب' (or 'Master Tailor' if English)
+    return isRtl ? 'ماسٹر صاحب' : 'Master Tailor';
+  }, [masterName, currentUser?.displayName, isRtl]);
 
   const handleManualCloudSync = async () => {
     if (!currentUser) return { success: false, count: 0 };
@@ -810,12 +836,12 @@ export default function AzadMasterFinalApp() {
           className="bg-[#075e54] text-white px-4 py-2.5 flex items-center justify-between shrink-0 relative shadow-md z-30" 
           dir="ltr"
         >
-          {/* Left Side: 4-Line Menu Button & Circular Brand Logo & App Title */}
-          <div className="flex items-center space-x-2.5">
+          {/* Left Side: 4-Line Menu Button & Circular Brand Logo & App Title & Dynamic Tailor Name */}
+          <div className="flex items-center space-x-2.5 min-w-0 flex-1">
             <button 
               id="menu-btn"
               onClick={() => setShowSideMenu(!showSideMenu)} 
-              className="p-1.5 text-white hover:bg-white/15 active:bg-white/25 rounded-lg cursor-pointer transition-all active:scale-95"
+              className="p-1.5 text-white hover:bg-white/15 active:bg-white/25 rounded-lg cursor-pointer transition-all active:scale-95 shrink-0"
               aria-label="Side Navigation Menu"
               title="Menu"
             >
@@ -825,15 +851,29 @@ export default function AzadMasterFinalApp() {
               </svg>
             </button>
             <div className="w-7 h-7 rounded-full overflow-hidden bg-white/10 border border-amber-300/40 flex items-center justify-center shrink-0 shadow-xs">
-              <img src="/azad-master-logo.svg" alt="Azad Master Logo" className="w-full h-full object-contain" />
+              {masterPhoto ? (
+                <img src={masterPhoto} alt="Tailor" className="w-full h-full object-cover" />
+              ) : (
+                <img src="/azad-master-logo.svg" alt="Azad Master Logo" className="w-full h-full object-contain" />
+              )}
             </div>
-            <span className="font-black text-lg tracking-wider text-white m-0 select-none drop-shadow-xs">
-              AZAD MASTER
-            </span>
+            <div className="flex flex-col min-w-0">
+              <span className="font-black text-base sm:text-lg tracking-wider text-white m-0 select-none drop-shadow-xs leading-none">
+                AZAD MASTER
+              </span>
+              <span 
+                id="header-tailor-greeting"
+                className="text-[10px] sm:text-[11px] font-medium text-[#dcf8c6] truncate max-w-[130px] sm:max-w-[200px] leading-tight mt-0.5 flex items-center gap-1"
+                title={effectiveTailorName}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-[#25d366] shrink-0" />
+                <span className="truncate">{effectiveTailorName}</span>
+              </span>
+            </div>
           </div>
 
           {/* Right Side: Quick AI Chatbot Button & CustomDrawerMenu */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               id="header-ai-assistant-btn"
               type="button"
@@ -864,7 +904,7 @@ export default function AzadMasterFinalApp() {
             onLogout={handleLogout}
             currentLang={currentLang}
             onChangeLanguage={changeLanguage}
-            masterName={masterName || currentUser?.displayName || 'Master Tailor'}
+            masterName={effectiveTailorName}
             userPhone={masterPhone || currentUser?.phoneNumber || undefined}
             isRtl={isRtl}
           />
@@ -1310,12 +1350,13 @@ export default function AzadMasterFinalApp() {
             translations={t}
             isRtl={isRtl}
             onApplyMeasurements={handleApplyMeasurementsFromAI}
+            masterName={effectiveTailorName}
           />
         )}
 
         {showSettings && (
           <SettingsModal
-            masterName={masterName || currentUser?.displayName || 'Master Tailor'}
+            masterName={effectiveTailorName}
             masterPhoto={masterPhoto}
             onUpdateProfile={handleUpdateProfile}
             customers={customers}

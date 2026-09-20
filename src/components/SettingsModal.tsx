@@ -94,7 +94,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdateProfile(name.trim() || 'Pir Bakhash (Master)', photo);
+    onUpdateProfile(name.trim() || (isRtl ? 'ماسٹر صاحب' : 'Master Tailor'), photo);
     setSavedSuccess(true);
     setTimeout(() => {
       setSavedSuccess(false);

@@ -11,13 +11,15 @@ interface ChatbotModalProps {
   translations: Record<string, string>;
   isRtl: boolean;
   onApplyMeasurements?: (measurements: Partial<CustomerMeasurements>) => void;
+  masterName?: string;
 }
 
 export const ChatbotModal: React.FC<ChatbotModalProps> = ({
   onClose,
   translations: t,
   isRtl,
-  onApplyMeasurements
+  onApplyMeasurements,
+  masterName
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -724,6 +726,7 @@ export const ChatbotModal: React.FC<ChatbotModalProps> = ({
             isRtl={isRtl}
             onApplyMeasurements={onApplyMeasurements}
             onNewMessageFromVoice={handleNewMessageFromVoice}
+            masterName={masterName}
           />
         )}
       </div>
