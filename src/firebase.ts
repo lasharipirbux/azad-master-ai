@@ -108,23 +108,15 @@ export interface FirebaseAppConfig {
 
 /**
  * Real Firebase production configuration object loaded directly from active project credentials
- * Supports runtime environment variables for Vercel, Docker, and custom deployments.
  */
 export const activeFirebaseConfig: FirebaseAppConfig = {
-  apiKey: getRuntimeEnv(['VITE_FIREBASE_API_KEY', 'FIREBASE_API_KEY', 'REACT_APP_FIREBASE_API_KEY'])
-    || ((firebaseConfig && (firebaseConfig as any).apiKey) ? (firebaseConfig as any).apiKey : 'AIzaSyAjQ7cTB4kH77svICmQGCdhbhSz5IXUpCY'),
-  authDomain: getRuntimeEnv(['VITE_FIREBASE_AUTH_DOMAIN', 'FIREBASE_AUTH_DOMAIN', 'REACT_APP_FIREBASE_AUTH_DOMAIN'])
-    || ((firebaseConfig && (firebaseConfig as any).authDomain) ? (firebaseConfig as any).authDomain : 'empyrean-rigging-4lcf1.firebaseapp.com'),
-  projectId: getRuntimeEnv(['VITE_FIREBASE_PROJECT_ID', 'FIREBASE_PROJECT_ID', 'REACT_APP_FIREBASE_PROJECT_ID'])
-    || ((firebaseConfig && (firebaseConfig as any).projectId) ? (firebaseConfig as any).projectId : 'empyrean-rigging-4lcf1'),
-  storageBucket: getRuntimeEnv(['VITE_FIREBASE_STORAGE_BUCKET', 'FIREBASE_STORAGE_BUCKET', 'REACT_APP_FIREBASE_STORAGE_BUCKET'])
-    || ((firebaseConfig && (firebaseConfig as any).storageBucket) ? (firebaseConfig as any).storageBucket : 'empyrean-rigging-4lcf1.firebasestorage.app'),
-  messagingSenderId: getRuntimeEnv(['VITE_FIREBASE_MESSAGING_SENDER_ID', 'FIREBASE_MESSAGING_SENDER_ID'])
-    || ((firebaseConfig && (firebaseConfig as any).messagingSenderId) ? (firebaseConfig as any).messagingSenderId : '233024949239'),
-  appId: getRuntimeEnv(['VITE_FIREBASE_APP_ID', 'FIREBASE_APP_ID'])
-    || ((firebaseConfig && (firebaseConfig as any).appId) ? (firebaseConfig as any).appId : '1:233024949239:web:977cadbde0f974b5ae3cf2'),
-  firestoreDatabaseId: getRuntimeEnv(['VITE_FIRESTORE_DATABASE_ID', 'FIRESTORE_DATABASE_ID'])
-    || ((firebaseConfig && (firebaseConfig as any).firestoreDatabaseId) ? (firebaseConfig as any).firestoreDatabaseId : 'ai-studio-azadmastertailor-5ebcf705-17cc-4a0d-a990-93d623364a7a'),
+  apiKey: (firebaseConfig && (firebaseConfig as any).apiKey) || 'AIzaSyAjQ7cTB4kH77svICmQGCdhbhSz5IXUpCY',
+  authDomain: (firebaseConfig && (firebaseConfig as any).authDomain) || 'empyrean-rigging-4lcf1.firebaseapp.com',
+  projectId: (firebaseConfig && (firebaseConfig as any).projectId) || 'empyrean-rigging-4lcf1',
+  storageBucket: (firebaseConfig && (firebaseConfig as any).storageBucket) || 'empyrean-rigging-4lcf1.firebasestorage.app',
+  messagingSenderId: (firebaseConfig && (firebaseConfig as any).messagingSenderId) || '233024949239',
+  appId: (firebaseConfig && (firebaseConfig as any).appId) || '1:233024949239:web:977cadbde0f974b5ae3cf2',
+  firestoreDatabaseId: (firebaseConfig && (firebaseConfig as any).firestoreDatabaseId) || 'ai-studio-azadmastertailor-5ebcf705-17cc-4a0d-a990-93d623364a7a',
 };
 
 /**
@@ -207,11 +199,12 @@ export function getAuthErrorMessage(error: any, isRtl: boolean = true): string {
   } else if (
     code === 'auth/api-key-not-valid' ||
     code === 'auth/invalid-api-key' ||
-    message.includes('api-key-not-valid')
+    message.includes('api-key-not-valid') ||
+    message.includes('API key')
   ) {
     detail = isRtl
-      ? 'فائر بیس API Key کی توثیق نہیں ہو سکی۔ براہ کرم نئی ونڈو میں کوشش کریں۔'
-      : 'Firebase API key validation failed. Please try in a new window.';
+      ? `فائر بیس پروجیکٹ (${activeFirebaseConfig.projectId}) کی Web API Key درکار ہے۔ براہ کرم Firebase Console (console.firebase.google.com) میں جا کر Project Settings > General سے اپنے پروجیکٹ کی Web API Key حاصل کریں اور Vercel یا .env میں VITE_FIREBASE_API_KEY کے طور پر درج کریں۔`
+      : `Web API key required for Firebase project (${activeFirebaseConfig.projectId}). Please get your Web API Key from Firebase Console > Project Settings > General and configure VITE_FIREBASE_API_KEY in Vercel or .env.`;
   } else {
     detail = message || (isRtl ? 'گوگل لاگ ان میں خرابی پیش آئی۔' : 'An error occurred during Google sign-in.');
   }
