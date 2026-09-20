@@ -2,7 +2,8 @@ export type SupportedLanguage =
   | 'ur' | 'hi' | 'ar' | 'fa' | 'en'
   | 'fr' | 'de' | 'zh' | 'tr' | 'es'
   | 'it' | 'ru' | 'ja' | 'ko' | 'bn'
-  | 'pa' | 'sd' | 'ps' | 'ms' | 'id';
+  | 'pa' | 'sd' | 'ps' | 'ms' | 'id'
+  | 'pt' | 'th';
 
 export interface CustomerMeasurements {
   length: string;

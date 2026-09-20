@@ -78,3 +78,15 @@ export const getStatusMeta = (status?: string): StatusMeta => {
   }
   return ORDER_STATUSES.pending;
 };
+
+export const getLocalizedStatusLabel = (status: OrderStatus, t?: Record<string, string>): string => {
+  if (t) {
+    if (status === 'pending' && t.statusPending) return t.statusPending;
+    if (status === 'cutting' && t.statusCutting) return t.statusCutting;
+    if (status === 'stitching' && t.statusStitching) return t.statusStitching;
+    if (status === 'ready' && t.statusReady) return t.statusReady;
+    if (status === 'delivered' && t.statusDelivered) return t.statusDelivered;
+  }
+  const meta = ORDER_STATUSES[status];
+  return meta ? meta.labelEn : status;
+};

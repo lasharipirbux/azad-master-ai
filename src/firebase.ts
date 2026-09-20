@@ -14,6 +14,7 @@ import {
 } from 'firebase/auth';
 import { 
   getFirestore, 
+  initializeFirestore,
   collection, 
   addDoc, 
   setDoc,
@@ -132,9 +133,25 @@ export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(
 
 // Clean Auth and Firestore instances derived directly from the live initialized app instance
 export const auth = getAuth(app);
-export const db: Firestore = activeFirebaseConfig.firestoreDatabaseId && activeFirebaseConfig.firestoreDatabaseId !== '(default)'
-  ? getFirestore(app, activeFirebaseConfig.firestoreDatabaseId)
-  : getFirestore(app);
+
+const firestoreDbId = activeFirebaseConfig.firestoreDatabaseId && activeFirebaseConfig.firestoreDatabaseId !== '(default)'
+  ? activeFirebaseConfig.firestoreDatabaseId
+  : undefined;
+
+/**
+ * Configure Firestore with experimentalForceLongPolling to eliminate WebSockets / streaming fetch drops
+ * in iframe sandboxes, corporate proxies, and Cloud Run environments.
+ */
+export const db: Firestore = (() => {
+  try {
+    return initializeFirestore(app, {
+      experimentalForceLongPolling: true,
+    }, firestoreDbId);
+  } catch (err) {
+    console.warn("Firestore already initialized or error with custom settings, falling back to getFirestore:", err);
+    return firestoreDbId ? getFirestore(app, firestoreDbId) : getFirestore(app);
+  }
+})();
 
 // Enable local persistence
 setPersistence(auth, browserLocalPersistence).catch((err) => {
@@ -438,6 +455,10 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path
   };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
+  const errStr = error instanceof Error ? error.message : String(error);
+  if (errStr.includes('permission') || errStr.includes('PERMISSION_DENIED') || (error as any)?.code === 'permission-denied') {
+    throw new Error(JSON.stringify(errInfo));
+  }
   return errInfo;
 }
 

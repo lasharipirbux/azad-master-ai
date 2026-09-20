@@ -12,79 +12,67 @@ import {
   CheckCircle2,
   Sparkles 
 } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 interface AppGuideModalProps {
   onClose: () => void;
-  isRtl: boolean;
-  translations: Record<string, string>;
+  isRtl?: boolean;
+  translations?: Record<string, string>;
 }
 
 export const AppGuideModal: React.FC<AppGuideModalProps> = ({
   onClose,
-  isRtl,
 }) => {
+  const { t, isRtl } = useLanguage();
+
   const guideSteps = [
     {
       step: '1',
       icon: PlusCircle,
-      titleUrdu: 'نیا ناپ یا گاہک درج کرنا',
-      titleEn: 'Add New Measurement Slip',
-      descUrdu: 'نیچے موجود (+) کے بٹن پر کلک کریں، گاہک کا نام، فون نمبر اور ناپ (لمبائی، تیرا، بازو، سینہ، گھیر، کالر، شلوار، پانچہ) لکھیں یا بول کر خودکار درج کروائیں۔',
-      descEn: 'Tap the bottom (+) button, enter customer name, phone number, and measurements manually or speak to fill automatically.',
+      title: t.guideStep1Title || (isRtl ? 'نیا ناپ یا گاہک درج کرنا' : 'Add New Measurement Slip'),
+      desc: t.guideStep1Desc || (isRtl ? 'نیچے موجود (+) کے بٹن پر کلک کریں، گاہک کا نام، فون نمبر اور ناپ لکھیں یا بول کر خودکار درج کروائیں۔' : 'Tap the bottom (+) button, enter customer name, phone number, and measurements manually or speak to fill automatically.'),
       color: 'text-emerald-700 bg-emerald-50 border-emerald-200'
     },
     {
       step: '2',
       icon: Sparkles,
-      titleUrdu: 'آزاد ماسٹر اسسٹنٹ (Tailoring Assistant)',
-      titleEn: 'Azad Master Tailoring Assistant',
-      descUrdu: 'فارم میں وائس اور آٹو کیلکولیشن کی مدد سے ناپ بولیں، کٹنگ فارمولا یا کپڑے کا گز حساب سیکنڈوں میں معلوم کریں۔',
-      descEn: 'Use voice input and smart calculation tools to speak measurements, get instant fabric yardage, and expert tailoring cutting formulas.',
+      title: t.guideStep2Title || (isRtl ? 'آزاد ماسٹر اسسٹنٹ' : 'Azad Master Tailoring Assistant'),
+      desc: t.guideStep2Desc || (isRtl ? 'فارم میں وائس اور آٹو کیلکولیشن کی مدد سے ناپ بولیں، کٹنگ فارمولا یا کپڑے کا گز حساب سیکنڈوں میں معلوم کریں۔' : 'Use voice input and smart calculation tools to speak measurements, get instant fabric yardage, and expert tailoring cutting formulas.'),
       color: 'text-emerald-900 bg-[#e7f7ef] border-[#128c7e]/30'
     },
     {
       step: '3',
       icon: Camera,
-      titleUrdu: 'پرچہ اسکیننگ (Camera & Gallery OCR)',
-      titleEn: 'Scan Paper Slip with AI',
-      descUrdu: 'کیمرے سے پرچے یا کپڑے کی تصویر کھینچیں یا گیلری سے منتخب کریں۔ آزاد AI خودکار طریقے سے تمام ناپ پڑھ کر فارم میں بھر دے گا۔',
-      descEn: 'Snap a photo of handwritten slip from camera or pick from gallery. Azad AI will automatically read and extract the measurements.',
+      title: t.guideStep3Title || (isRtl ? 'پرچہ اسکیننگ' : 'Scan Paper Slip with AI'),
+      desc: t.guideStep3Desc || (isRtl ? 'کیمرے سے پرچے یا کپڑے کی تصویر کھینچیں یا گیلری سے منتخب کریں۔ آزاد AI خودکار طریقے سے تمام ناپ پڑھ کر فارم میں بھر دے گا۔' : 'Snap a photo of handwritten slip from camera or pick from gallery. Azad AI will automatically read and extract the measurements.'),
       color: 'text-blue-700 bg-blue-50 border-blue-200'
     },
     {
       step: '4',
       icon: Clock,
-      titleUrdu: 'آرڈرز ٹریکنگ اور اسٹیٹس فلٹرز',
-      titleEn: 'Order Tracking & Live Status',
-      descUrdu: 'کسٹمر کارڈ پر موجود ڈراپ ڈاؤن سے اسٹیٹس بدلیں: زیرِ کار (Pending)، کٹنگ (Cutting)، سلائی (Stitching)، تیار (Ready)، حوالے (Delivered)۔ اوپر والے فلٹرز سے آرڈرز چھانٹیں۔',
-      descEn: 'Update order status directly on customer cards (Pending, Cutting, Stitching, Ready, Delivered) and use top chips to filter orders.',
+      title: t.guideStep4Title || (isRtl ? 'آرڈرز ٹریکنگ اور اسٹیٹس فلٹرز' : 'Order Tracking & Live Status'),
+      desc: t.guideStep4Desc || (isRtl ? 'کسٹمر کارڈ پر موجود ڈراپ ڈاؤن سے اسٹیٹس بدلیں: زیرِ کار، کٹنگ، سلائی، تیار، حوالے' : 'Update order status directly on customer cards (Pending, Cutting, Stitching, Ready, Delivered) and use top chips to filter orders.'),
       color: 'text-amber-700 bg-amber-50 border-amber-200'
     },
     {
       step: '5',
       icon: MessageCircle,
-      titleUrdu: 'واٹس ایپ کٹنگ رسید بھیجنا',
-      titleEn: 'Direct WhatsApp Sharing',
-      descUrdu: 'ہر کسٹمر کارڈ یا ڈیجیٹل سلپ کے اندر موجود واٹس ایپ بٹن دبائیں؛ خوبصورت اردو فارمیٹ میں ناپ کا مکمل پرچہ براہ راست گاہک کے نمبر پر چلا جائے گا۔',
-      descEn: 'Click the WhatsApp button on any card or slip to send a professionally formatted measurement receipt directly to the customer.',
+      title: isRtl ? 'واٹس ایپ کٹنگ رسید بھیجنا' : 'Direct WhatsApp Sharing',
+      desc: isRtl ? 'ہر کسٹمر کارڈ یا ڈیجیٹل سلپ کے اندر موجود واٹس ایپ بٹن دبائیں؛ ناپ کا مکمل پرچہ براہ راست گاہک کے نمبر پر چلا جائے گا۔' : 'Click the WhatsApp button on any card or slip to send a professionally formatted measurement receipt directly to the customer.',
       color: 'text-green-700 bg-green-50 border-green-200'
     },
     {
       step: '6',
       icon: Scissors,
-      titleUrdu: '✂️ کٹنگ موڈ (Master Cutting Screen)',
-      titleEn: 'Cutting Mode for Tailors',
-      descUrdu: 'ڈیجیٹل سلپ کھول کر ✂️ کٹنگ موڈ آن کریں۔ تمام ناپ بڑی اور نمایاں امبر رنگ میں نظر آئیں گی تاکہ کپڑا کاٹتے وقت واضح اور آسانی ہو۔',
-      descEn: 'Open any digital slip and activate ✂️ Cutting Mode. Measurements appear in giant amber font for effortless viewing while cutting fabric.',
+      title: isRtl ? '✂️ کٹنگ موڈ' : '✂️ Cutting Mode for Tailors',
+      desc: isRtl ? 'ڈیجیٹل سلپ کھول کر ✂️ کٹنگ موڈ آن کریں۔ تمام ناپ بڑی اور نمایاں امبر رنگ میں نظر آئیں گی تاکہ کپڑا کاٹتے وقت واضح اور آسانی ہو۔' : 'Open any digital slip and activate ✂️ Cutting Mode. Measurements appear in giant amber font for effortless viewing while cutting fabric.',
       color: 'text-purple-700 bg-purple-50 border-purple-200'
     },
     {
       step: '7',
       icon: Globe,
-      titleUrdu: 'زبان کی تبدیلی اور ڈیٹا بیک اپ',
-      titleEn: '20 Languages & Cloud Backup',
-      descUrdu: 'مینو سے اردو، سندھی، ہندی، پشتو، پنجابی، عربی، انگریزی سمیت 20 زبانیں منتخب کر سکتے ہیں۔ سیٹنگز سے اپنے تمام ریکارڈ کا بیک اپ ڈاؤنلوڈ اور ری اسٹور کریں۔',
-      descEn: 'Select from 20 supported languages (Urdu, Sindhi, Hindi, Pashto, Punjabi, Arabic, English, etc.) in the side menu. Export and restore all customer data backups securely from Settings.',
+      title: isRtl ? 'زبان کی تبدیلی اور ڈیٹا بیک اپ' : '22 Languages & Cloud Backup',
+      desc: isRtl ? 'مینو سے اردو، سندھی، ہندی، پشتو، پنجابی، عربی، انگریزی سمیت 22 زبانیں منتخب کر سکتے ہیں۔ سیٹنگز سے اپنے تمام ریکارڈ کا بیک اپ ڈاؤنلوڈ اور ری اسٹور کریں۔' : 'Select from 22 supported languages in the menu. Export and restore all customer data backups securely from Settings.',
       color: 'text-teal-700 bg-teal-50 border-teal-200'
     }
   ];
@@ -106,10 +94,10 @@ export const AppGuideModal: React.FC<AppGuideModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-[15px] text-white tracking-wide leading-tight">
-                {isRtl ? 'استعمال کا طریقہ (App Guide)' : 'App Guide & Instructions'}
+                {t.appGuideTitle || (isRtl ? 'استعمال کا طریقہ' : 'App Guide & Instructions')}
               </h3>
               <p className="text-[10.5px] text-emerald-200">
-                {isRtl ? 'آزاد ماسٹر ایپ چلانے کے آسان طریقے' : 'Step-by-step master guide'}
+                {t.appGuideSub || (isRtl ? 'آزاد ماسٹر ایپ چلانے کے آسان طریقے' : 'Step-by-step master guide')}
               </p>
             </div>
           </div>
@@ -138,13 +126,13 @@ export const AppGuideModal: React.FC<AppGuideModalProps> = ({
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="font-bold text-slate-900 text-[13px] flex items-center justify-between">
-                      <span>{isRtl ? item.titleUrdu : item.titleEn}</span>
+                      <span>{item.title}</span>
                       <span className="text-[10px] text-slate-400 font-bold">#{item.step}</span>
                     </h4>
                   </div>
                 </div>
                 <p className="text-slate-600 text-[11.5px] leading-relaxed pr-1 pl-1">
-                  {isRtl ? item.descUrdu : item.descEn}
+                  {item.desc}
                 </p>
               </div>
             );
@@ -160,12 +148,12 @@ export const AppGuideModal: React.FC<AppGuideModalProps> = ({
             }}
           >
             <h3 className="font-bold text-sm" style={{ color: '#d4af37' }}>
-              Need Help? / مدد چاہیے؟
+              {t.needHelpTitle || 'Need Help?'}
             </h3>
             <p className="text-xs text-slate-200 leading-relaxed">
-              {isRtl 
+              {t.developerInfo || (isRtl 
                 ? 'اگر آپ کو آزاد ماسٹر ایپ استعمال کرنے میں کوئی دشواری ہو، تو ہم سے بلا جھجھک رابطہ کریں:'
-                : 'If you face any issue using Azad Master, feel free to contact us:'}
+                : 'If you face any issue using Azad Master, feel free to contact us:')}
             </p>
             
             {/* WhatsApp Contact */}
@@ -178,7 +166,7 @@ export const AppGuideModal: React.FC<AppGuideModalProps> = ({
                 className="font-semibold hover:underline flex items-center gap-1 transition-all"
                 style={{ color: '#00ff80' }}
               >
-                <span>💬 Contact on WhatsApp</span>
+                <span>💬 {t.contactWhatsApp || 'Contact on WhatsApp'}</span>
               </a>
             </div>
 
@@ -202,9 +190,9 @@ export const AppGuideModal: React.FC<AppGuideModalProps> = ({
               <span>{isRtl ? 'ضروری مشورہ (Pro Tip):' : 'Pro Tip:'}</span>
             </div>
             <p className="text-[11px] text-emerald-100 leading-relaxed">
-              {isRtl 
+              {t.secureStorage100 || (isRtl 
                 ? 'کسی بھی ناپ پرچی کو ہمیشہ آف لائن بھی استعمال کر سکتے ہیں۔ انٹرنیٹ آنے پر ڈیٹا خودکار فائر اسٹور کلاؤڈ پر محفوظ ہو جاتا ہے۔'
-                : 'All measurement records work offline seamlessly and sync automatically to Firestore cloud storage when connected.'}
+                : 'All measurement records work offline seamlessly and sync automatically to Firestore cloud storage when connected.')}
             </p>
           </div>
         </div>
@@ -217,7 +205,7 @@ export const AppGuideModal: React.FC<AppGuideModalProps> = ({
             className="w-full bg-[#0d4a2a] hover:bg-[#09351e] active:scale-[0.98] text-white py-2.5 px-4 rounded-xl font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
           >
             <ShieldCheck className="w-4 h-4 text-[#10b981]" />
-            <span>{isRtl ? 'ٹھیک ہے / سمجھ گیا' : 'Got it / Close Guide'}</span>
+            <span>{t.closeGuide || (isRtl ? 'ٹھیک ہے / سمجھ گیا' : 'Got it / Close Guide')}</span>
           </button>
         </div>
       </div>

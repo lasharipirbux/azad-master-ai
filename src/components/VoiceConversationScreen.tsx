@@ -4,6 +4,7 @@ import { X, Mic, MicOff, Volume2, Sparkles, CheckCircle2, RotateCcw } from 'luci
 import { speakText, stopSpeaking } from '../utils/speechSynthesis';
 import { parseMeasurementsFromText } from '../utils/measurementParser';
 import { saveMeasurementToFirebase } from '../firebase';
+import { useLanguage } from '../context/LanguageContext';
 
 interface VoiceConversationScreenProps {
   onClose: () => void;
@@ -24,6 +25,7 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
   masterName,
   currentLang = 'ur'
 }) => {
+  const { t } = useLanguage();
   const [conversationState, setConversationState] = useState<ConversationState>('idle');
   const [userTranscript, setUserTranscript] = useState<string>('');
   const [aiResponseText, setAiResponseText] = useState<string>('');
@@ -38,13 +40,31 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
   const isMutedRef = useRef(isMuted);
 
   const getSpeechLang = (): string => {
-    if (currentLang === 'en') return 'en-US';
-    if (currentLang === 'hi') return 'hi-IN';
-    if (currentLang === 'sd') return 'ur-PK';
-    if (currentLang === 'ar') return 'ar-SA';
-    if (currentLang === 'fa') return 'fa-IR';
-    if (currentLang === 'ps') return 'ps-AF';
-    return isRtl ? 'ur-PK' : 'en-US';
+    const speechMap: Record<string, string> = {
+      en: 'en-US',
+      ur: 'ur-PK',
+      sd: 'ur-PK',
+      hi: 'hi-IN',
+      ar: 'ar-SA',
+      fa: 'fa-IR',
+      ps: 'ps-AF',
+      pa: 'pa-IN',
+      bn: 'bn-BD',
+      tr: 'tr-TR',
+      es: 'es-ES',
+      fr: 'fr-FR',
+      de: 'de-DE',
+      it: 'it-IT',
+      ru: 'ru-RU',
+      zh: 'zh-CN',
+      ja: 'ja-JP',
+      ko: 'ko-KR',
+      ms: 'ms-MY',
+      id: 'id-ID',
+      pt: 'pt-BR',
+      th: 'th-TH'
+    };
+    return speechMap[currentLang] || (currentLang === 'ur' ? 'ur-PK' : 'en-US');
   };
 
   useEffect(() => {
@@ -55,27 +75,34 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
   useEffect(() => {
     isMountedRef.current = true;
 
-    const tailorGreetingName = masterName?.trim() || (isRtl ? (currentLang === 'sd' ? 'استاد صاحب' : 'ماسٹر صاحب') : 'Master Tailor');
+    const tailorGreetingName = masterName?.trim() || t.masterDefaultName || (currentLang === 'ur' ? 'ماسٹر صاحب' : 'Master');
     let initialGreeting = '';
-    if (currentLang === 'en') {
-      initialGreeting = `Hello ${tailorGreetingName}! I am listening. Speak your measurements or any tailoring question.`;
+    if (currentLang === 'ur') {
+      initialGreeting = `جی ${tailorGreetingName}! میں سن رہا ہوں۔ آپ ناپ یا کٹنگ کا کوئی بھی سوال بول سکتے ہیں۔`;
     } else if (currentLang === 'sd') {
       initialGreeting = `جي ${tailorGreetingName}! مان ٻڌي رهيو آهيان. اوهان ماپ يا ڪٽنگ جو ڪوبه سوال ڳالهائي سگهو ٿا.`;
     } else if (currentLang === 'hi') {
       initialGreeting = `नमस्ते ${tailorGreetingName}! मैं सुन रहा हूँ। आप माप या कटिंग का कोई भी सवाल बोल सकते हैं।`;
-    } else if (isRtl) {
-      initialGreeting = `جی ${tailorGreetingName}! میں سن رہا ہوں۔ آپ ناپ یا کٹنگ کا کوئی بھی سوال بول سکتے ہیں۔`;
+    } else if (currentLang === 'ar') {
+      initialGreeting = `أهلاً بك ${tailorGreetingName}! أنا أستمع إليك. تفضل بنطق القياسات أو أي سؤال حول الخياطة.`;
+    } else if (currentLang === 'fa') {
+      initialGreeting = `درود ${tailorGreetingName}! من در حال شنیدن هستم. می‌توانید اندازه‌ها یا پرسش خیاطی خود را بفرمایید.`;
+    } else if (currentLang === 'ps') {
+      initialGreeting = `سلام ${tailorGreetingName}! زه اورم. تاسو کولی شئ خپلې اندازې یا د خیاطۍ پوښتنه ووایاست.`;
+    } else if (currentLang === 'es') {
+      initialGreeting = `¡Hola ${tailorGreetingName}! Te escucho. Indica las medidas o cualquier duda de sastrería.`;
+    } else if (currentLang === 'fr') {
+      initialGreeting = `Bonjour ${tailorGreetingName}! Je vous écoute. Indiquez vos mesures ou votre question.`;
+    } else if (currentLang === 'de') {
+      initialGreeting = `Hallo ${tailorGreetingName}! Ich höre zu. Bitte nennen Sie Ihre Maße oder Schneidereifragen.`;
+    } else if (currentLang === 'tr') {
+      initialGreeting = `Merhaba ${tailorGreetingName}! Sizi dinliyorum. Ölçülerinizi veya terzilik sorularınızı söyleyebilirsiniz.`;
     } else {
       initialGreeting = `Hello ${tailorGreetingName}! I am listening. Speak your measurements or any tailoring question.`;
     }
 
     setAiResponseText(initialGreeting);
-    setStatusNote(
-      currentLang === 'en' ? 'Azad Master Assistant speaking...' :
-      currentLang === 'sd' ? 'آزاد ماسٽر اسسٽنٽ ڳالهائي رهيو آهي...' :
-      currentLang === 'hi' ? 'आजाद मास्टर असिस्टेंट बोल रहा है...' :
-      (isRtl ? 'آزاد ماسٹر اسسٹنٹ بول رہا ہے...' : 'Azad Master Assistant speaking...')
-    );
+    setStatusNote(t.botSpeaking || `${t.aiVoiceAssistant}...`);
     setConversationState('speaking');
 
     cancelSpeechRef.current = speakText(
@@ -89,11 +116,7 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
           startListening();
         } else if (isMountedRef.current) {
           setConversationState('idle');
-          setStatusNote(
-            currentLang === 'en' ? 'Microphone is muted' :
-            currentLang === 'sd' ? 'مائيڪروفون بند آهي' :
-            (isRtl ? 'مائیکروفون آف ہے' : 'Microphone is muted')
-          );
+          setStatusNote(t.tapToSpeak || 'Microphone muted');
         }
       },
       () => {
@@ -117,7 +140,7 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
   const startListening = () => {
     if (isMutedRef.current) return;
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      setStatusNote(isRtl ? 'براؤزر میں آواز ریکارڈر دستیاب نہیں ہے۔' : 'Speech recognition not supported.');
+      setStatusNote(t.browserNoVoice || 'Speech recognition not supported.');
       setConversationState('idle');
       return;
     }
@@ -133,14 +156,14 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
       const recognition = new SpeechRecognition();
       recognitionRef.current = recognition;
 
-      recognition.lang = isRtl ? 'ur-PK' : 'en-US';
+      recognition.lang = getSpeechLang();
       recognition.continuous = false;
       recognition.interimResults = true;
 
       recognition.onstart = () => {
         if (!isMountedRef.current) return;
         setConversationState('listening');
-        setStatusNote(isRtl ? 'سن رہا ہوں... آپ بولیں' : 'Listening... please speak');
+        setStatusNote(t.listeningVoice || 'Listening... please speak');
       };
 
       recognition.onresult = (event: any) => {
@@ -167,9 +190,8 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
         console.warn('Recognition error in voice mode:', event.error);
         if (!isMountedRef.current) return;
         if (event.error === 'no-speech') {
-          // If no speech, gently restart listening if not muted
           if (!isMutedRef.current && conversationState === 'listening') {
-            setStatusNote(isRtl ? 'سن رہا ہوں... آپ بولیں' : 'Listening... please speak');
+            setStatusNote(t.listeningVoice || 'Listening... please speak');
             setTimeout(() => {
               if (isMountedRef.current && !isMutedRef.current && conversationState !== 'speaking') {
                 startListening();
@@ -178,13 +200,12 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
           }
         } else {
           setConversationState('idle');
-          setStatusNote(isRtl ? 'مائیک کو دوبارہ دبائیں' : 'Tap mic to speak');
+          setStatusNote(t.tapToSpeak || 'Tap mic to speak');
         }
       };
 
       recognition.onend = () => {
         if (!isMountedRef.current) return;
-        // if still listening and no result was processed, don't leave hanging
       };
 
       recognition.start();
@@ -204,7 +225,7 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
     }
 
     setConversationState('processing');
-    setStatusNote(isRtl ? 'سوچ رہا ہے...' : 'Thinking...');
+    setStatusNote(t.processingVoice || 'Thinking...');
 
     // Parse measurement immediately locally as well
     const localParsed = parseMeasurementsFromText(spokenText);
@@ -222,17 +243,17 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
       const data = await response.json();
       const detected = data.parsedMeasurements || localParsed;
 
-      const callerTitle = masterName?.trim() || (isRtl ? (currentLang === 'sd' ? 'استاد صاحب' : 'ماسٹر صاحب') : 'Master');
+      const callerTitle = masterName?.trim() || t.masterDefaultName || (currentLang === 'ur' ? 'ماسٹر صاحب' : 'Master');
       let replyText = data.reply;
       if (!replyText) {
-        if (currentLang === 'en') {
-          replyText = `Got it, ${callerTitle}!`;
+        if (currentLang === 'ur') {
+          replyText = `جی ${callerTitle}! آپ کی بات سمجھ آ گئی ہے۔`;
         } else if (currentLang === 'sd') {
           replyText = `جي ${callerTitle}! اوهان جي ڳالهه سمجهه ۾ اچي وئي.`;
         } else if (currentLang === 'hi') {
           replyText = `जी ${callerTitle}! आपकी बात समझ आ गई।`;
-        } else if (isRtl) {
-          replyText = `جی ${callerTitle}! آپ کی بات سمجھ آ گئی ہے۔`;
+        } else if (currentLang === 'ar') {
+          replyText = `حسناً ${callerTitle}! لقد فهمت طلبك.`;
         } else {
           replyText = `Got it, ${callerTitle}!`;
         }
@@ -251,12 +272,7 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
 
       // Now speak the response aloud
       setConversationState('speaking');
-      setStatusNote(
-        currentLang === 'en' ? 'Azad AI responding...' :
-        currentLang === 'sd' ? 'آزاد اي آءِ جواب ڏئي رهيو آهي...' :
-        currentLang === 'hi' ? 'आजाद एआई जवाब दे रहा है...' :
-        (isRtl ? 'آزاد AI جواب دے رہا ہے...' : 'Azad AI responding...')
-      );
+      setStatusNote(t.botSpeaking || 'Responding...');
 
       cancelSpeechRef.current = speakText(
         replyText,
@@ -265,13 +281,12 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
           if (isMountedRef.current) setConversationState('speaking');
         },
         () => {
-          // Finished speaking: resume natural two-way listening
           if (isMountedRef.current && !isMutedRef.current) {
             setUserTranscript('');
             startListening();
           } else if (isMountedRef.current) {
             setConversationState('idle');
-            setStatusNote(isRtl ? 'گفتگو روکی گئی ہے' : 'Conversation paused');
+            setStatusNote(t.tapToSpeak || 'Conversation paused');
           }
         },
         () => {
@@ -283,14 +298,14 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
 
     } catch (err) {
       console.error('Error in Voice Mode chat:', err);
-      const fallbackMsg = isRtl
-        ? "معذرت، آواز کا رابطہ قائم نہ ہو سکا۔ آپ دوبارہ فرما سکتے ہیں۔"
-        : "Could not reach server. Please speak again.";
+      const fallbackMsg = currentLang === 'ur'
+        ? "معذرت، رابطہ قائم نہ ہو سکا۔ آپ دوبارہ فرما سکتے ہیں۔"
+        : (currentLang === 'ar' ? "عذراً، تعذر الاتصال بالخادم. يرجى التحدث مرة أخرى." : "Could not reach server. Please speak again.");
       setAiResponseText(fallbackMsg);
       setConversationState('speaking');
       cancelSpeechRef.current = speakText(
         fallbackMsg,
-        isRtl ? 'ur-PK' : 'en-US',
+        getSpeechLang(),
         undefined,
         () => {
           if (isMountedRef.current && !isMutedRef.current) {
@@ -314,7 +329,7 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
         } catch {}
       }
       setConversationState('idle');
-      setStatusNote(isRtl ? 'مائیک خاموش ہے (Muted)' : 'Microphone muted');
+      setStatusNote('Microphone muted');
     } else {
       startListening();
     }
@@ -367,11 +382,11 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
             </div>
             <div>
               <h3 className="font-bold text-sm text-emerald-100 flex items-center gap-1.5">
-                {isRtl ? 'آزاد ماسٹر اسسٹنٹ وائس' : 'Azad Master Assistant'}
+                {t.aiVoiceAssistant || 'Azad Master Assistant'}
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block" />
               </h3>
               <p className="text-[10px] text-emerald-300/70">
-                {isRtl ? 'دو طرفہ آواز میں بات چیت' : 'Live Two-Way Voice'}
+                {t.aiVoiceAssistantSub || 'Live Two-Way Voice'}
               </p>
             </div>
           </div>
@@ -383,10 +398,10 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
               onClose();
             }}
             className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/90 text-xs font-semibold flex items-center gap-1 transition-colors border border-white/10 shadow-xs cursor-pointer"
-            title={isRtl ? 'بند کریں' : 'End'}
+            title={t.closeVoiceMode || 'End'}
           >
             <X className="w-3.5 h-3.5" />
-            <span>{isRtl ? 'ختم کریں' : 'End'}</span>
+            <span>{t.closeVoiceMode || 'End'}</span>
           </button>
         </div>
 
@@ -397,7 +412,7 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
           <div 
             onClick={handleInterruptOrTap}
             className="relative w-48 h-48 cursor-pointer flex items-center justify-center my-auto transition-transform active:scale-95"
-            title={isRtl ? 'بولنے کے لیے ٹیپ کریں' : 'Tap to speak'}
+            title={t.tapToSpeak || 'Tap to speak'}
           >
             {/* Outer Expanding Waves for Speaking/Listening */}
             {conversationState === 'speaking' && (
@@ -444,10 +459,10 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
                 
                 {/* Voice Status Pill Tag */}
                 <div className="px-2.5 py-0.5 rounded-full bg-[#054840]/95 border border-[#25d366]/60 text-[9px] font-extrabold tracking-wider text-[#dcf8c6] whitespace-nowrap shadow-md">
-                  {conversationState === 'speaking' && (isRtl ? '🎙️ بول رہا ہے' : '🎙️ Speaking')}
-                  {conversationState === 'listening' && (isRtl ? '👂 سن رہا ہے' : '👂 Listening')}
-                  {conversationState === 'processing' && (isRtl ? '⏳ سوچ رہا ہے' : '⏳ Thinking')}
-                  {conversationState === 'idle' && (isRtl ? '👆 ٹیپ کریں' : '👆 Tap to Talk')}
+                  {conversationState === 'speaking' && (t.botSpeaking ? `🎙️ ${t.botSpeaking}` : '🎙️ Speaking')}
+                  {conversationState === 'listening' && (t.listeningVoice ? `👂 ${t.listeningVoice}` : '👂 Listening')}
+                  {conversationState === 'processing' && (t.processingVoice ? `⏳ ${t.processingVoice}` : '⏳ Thinking')}
+                  {conversationState === 'idle' && (t.tapToSpeak ? `👆 ${t.tapToSpeak}` : '👆 Tap to Talk')}
                 </div>
               </div>
 
@@ -487,7 +502,7 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
             {userTranscript && (
               <div className="text-emerald-200 flex items-start gap-1.5">
                 <span className="font-bold text-[10px] uppercase bg-emerald-900/90 border border-emerald-600/40 px-1 py-0.5 rounded text-emerald-200 shrink-0">
-                  {isRtl ? 'آپ' : 'You'}:
+                  User:
                 </span>
                 <span className="italic line-clamp-2">{userTranscript}</span>
               </div>
@@ -506,55 +521,55 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
           {detectedMeasurements && Object.keys(detectedMeasurements).length > 0 && (
             <div className="w-full mt-2 p-2.5 rounded-2xl bg-emerald-950/80 border border-amber-400/40 text-xs space-y-1.5 animate-in slide-in-from-bottom-2">
               <div className="flex items-center justify-between text-[11px] font-bold text-amber-300 pb-1 border-b border-white/10">
-                <span>📏 {isRtl ? 'ناپ مل گئی (Confirmation Required)' : 'Detected Measurements'}</span>
+                <span>📏 {t.detectedMeasurementsHeading || 'Detected Measurements'}</span>
                 <span>{Object.keys(detectedMeasurements).length} fields</span>
               </div>
               <div className="grid grid-cols-4 gap-1 text-[10px] text-center">
                 {detectedMeasurements.length && (
                   <div className="bg-white/10 rounded p-1">
-                    <div className="text-emerald-300">لمبائی</div>
+                    <div className="text-emerald-300">{t.lengthLabel || 'Length'}</div>
                     <div className="font-bold text-white">{detectedMeasurements.length}</div>
                   </div>
                 )}
                 {detectedMeasurements.shoulder && (
                   <div className="bg-white/10 rounded p-1">
-                    <div className="text-emerald-300">تیرا</div>
+                    <div className="text-emerald-300">{t.shoulderLabel || 'Shoulder'}</div>
                     <div className="font-bold text-white">{detectedMeasurements.shoulder}</div>
                   </div>
                 )}
                 {detectedMeasurements.sleeves && (
                   <div className="bg-white/10 rounded p-1">
-                    <div className="text-emerald-300">بازو</div>
+                    <div className="text-emerald-300">{t.sleevesLabel || 'Sleeves'}</div>
                     <div className="font-bold text-white">{detectedMeasurements.sleeves}</div>
                   </div>
                 )}
                 {detectedMeasurements.chest && (
                   <div className="bg-white/10 rounded p-1">
-                    <div className="text-emerald-300">سینہ</div>
+                    <div className="text-emerald-300">{t.chestLabel || 'Chest'}</div>
                     <div className="font-bold text-white">{detectedMeasurements.chest}</div>
                   </div>
                 )}
                 {detectedMeasurements.daaman && (
                   <div className="bg-white/10 rounded p-1">
-                    <div className="text-emerald-300">گھیرا</div>
+                    <div className="text-emerald-300">{t.daamanLabel || 'Daaman'}</div>
                     <div className="font-bold text-white">{detectedMeasurements.daaman}</div>
                   </div>
                 )}
                 {detectedMeasurements.collar && (
                   <div className="bg-white/10 rounded p-1">
-                    <div className="text-emerald-300">کالر</div>
+                    <div className="text-emerald-300">{t.collarLabel || 'Collar'}</div>
                     <div className="font-bold text-white">{detectedMeasurements.collar}</div>
                   </div>
                 )}
                 {detectedMeasurements.shalwar && (
                   <div className="bg-white/10 rounded p-1">
-                    <div className="text-emerald-300">شلوار</div>
+                    <div className="text-emerald-300">{t.shalwarLabel || 'Shalwar'}</div>
                     <div className="font-bold text-white">{detectedMeasurements.shalwar}</div>
                   </div>
                 )}
                 {detectedMeasurements.pancha && (
                   <div className="bg-white/10 rounded p-1">
-                    <div className="text-emerald-300">پانچہ</div>
+                    <div className="text-emerald-300">{t.panchaLabel || 'Pancha'}</div>
                     <div className="font-bold text-white">{detectedMeasurements.pancha}</div>
                   </div>
                 )}
@@ -567,11 +582,11 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
                   className="w-full py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-98"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  {isRtl ? 'تصدیق کریں اور سلپ میں محفوظ کریں' : 'Confirm & Send to Slip'}
+                  {t.confirmAndApplySlip || 'Confirm & Send to Slip'}
                 </button>
               ) : (
                 <div className="py-1 text-center font-semibold text-emerald-300 text-[11px]">
-                  ✓ {isRtl ? 'تصدیق ہو گئی ہے۔ سلپ میں شامل کیا جا رہا ہے۔' : 'Confirmed! Added to slip.'}
+                  ✓ {t.confirmedMeasurement || 'Confirmed! Added to slip.'}
                 </div>
               )}
             </div>
@@ -591,7 +606,7 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
                 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' 
                 : 'bg-white/10 text-white hover:bg-white/20 border border-white/10'
             }`}
-            title={isMuted ? (isRtl ? 'مائیک آن کریں' : 'Unmute') : (isRtl ? 'مائیک بند کریں' : 'Mute')}
+            title={isMuted ? "Unmute" : "Mute"}
           >
             {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
           </button>
@@ -601,7 +616,7 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
             type="button"
             onClick={handleInterruptOrTap}
             className="w-14 h-14 rounded-full bg-gradient-to-tr from-[#25d366] via-[#128c7e] to-[#25d366] text-white flex items-center justify-center shadow-lg shadow-[#25d366]/40 hover:scale-105 active:scale-95 transition-all p-2 border-2 border-white/60 cursor-pointer"
-            title={conversationState === 'speaking' ? (isRtl ? 'روکیں اور بولیں' : 'Interrupt & Speak') : (isRtl ? 'بولیں' : 'Speak')}
+            title={conversationState === 'speaking' ? "Interrupt & Speak" : "Speak"}
           >
             {conversationState === 'speaking' ? (
               <RotateCcw className="w-6 h-6 text-white animate-spin" />
@@ -618,7 +633,7 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
               onClose();
             }}
             className="w-12 h-12 rounded-full bg-rose-600/80 hover:bg-rose-600 text-white flex items-center justify-center border border-rose-400/40 shadow-sm transition-all"
-            title={isRtl ? 'وائس موڈ بند کریں' : 'End Voice Mode'}
+            title={t.closeVoiceMode || 'End Voice Mode'}
           >
             <X className="w-5 h-5" />
           </button>

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { allCountries, CountryData } from '../data/countries';
+import { useLanguage } from '../context/LanguageContext';
 
 interface CountrySelectorModalProps {
   isOpen: boolean;
@@ -14,8 +15,10 @@ export const CountrySelectorModal: React.FC<CountrySelectorModalProps> = ({
   onClose,
   selectedCode,
   onSelect,
-  isRtl = false,
+  isRtl: propIsRtl,
 }) => {
+  const { t, isRtl: ctxIsRtl } = useLanguage();
+  const isRtl = propIsRtl !== undefined ? propIsRtl : ctxIsRtl;
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredCountries = useMemo(() => {
@@ -47,7 +50,7 @@ export const CountrySelectorModal: React.FC<CountrySelectorModalProps> = ({
         <div className="bg-emerald-800 text-white p-4 flex items-center justify-between">
           <div className="text-left rtl:text-right">
             <h3 className="font-bold text-sm">
-              {isRtl ? 'ملک منتخب کریں (Country Code)' : 'Select Country & Dialing Code'}
+              {t.countryCodeLabel || (isRtl ? 'ملک منتخب کریں' : 'Select Country & Dialing Code')}
             </h3>
             <p className="text-[10px] text-emerald-200">
               {isRtl ? 'تمام بین الاقوامی ممالک اور کالنگ کوڈز' : 'All International Countries & Codes'}

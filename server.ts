@@ -50,27 +50,33 @@ const LANG_NAME_MAP: Record<string, { englishName: string; nativeName: string }>
   ja: { englishName: "Japanese", nativeName: "日本語" },
   ko: { englishName: "Korean", nativeName: "한국어" },
   ms: { englishName: "Malay", nativeName: "Bahasa Melayu" },
-  id: { englishName: "Indonesian", nativeName: "Bahasa Indonesia" }
+  id: { englishName: "Indonesian", nativeName: "Bahasa Indonesia" },
+  pt: { englishName: "Portuguese", nativeName: "Português" },
+  th: { englishName: "Thai", nativeName: "ไทย" }
 };
 
-function getSystemPrompt(langCode: string = 'ur'): string {
-  const normLang = (langCode || 'ur').toLowerCase().trim();
-  const langMeta = LANG_NAME_MAP[normLang] || LANG_NAME_MAP['ur'];
+function getSystemPrompt(langCode: string = 'en'): string {
+  const normLang = (langCode || 'en').toLowerCase().trim();
+  const langMeta = LANG_NAME_MAP[normLang] || LANG_NAME_MAP['en'] || { englishName: "English", nativeName: "English" };
   const targetLanguageName = langMeta.englishName;
 
   return `
+Reply strictly in ${targetLanguageName}. Do not mix any other language. Do not use Urdu unless the selected language is Urdu.
+
 You are the official AI assistant of "Azad Master" (آزاد ماسٹر) — a professional tailoring (darzi) app used to manage customer measurements, orders, and digital records.
 
 =======================================================
 CRITICAL MULTILINGUAL DIRECTIVE (HIGHEST PRIORITY):
 The user's active UI application language is: ${targetLanguageName} (Language code: "${normLang}").
-- You MUST strictly write your response in ${targetLanguageName}.
-- If the language is English, respond purely in clear, natural English.
-- If the language is Urdu, respond purely in Urdu.
-- If the language is Sindhi, respond purely in Sindhi.
-- If the language is Hindi, respond purely in Hindi.
-- Never respond in a different language unless the user explicitly commands you to switch.
-- Every explanation, greeting, calculation, and tailoring guidance must be communicated in ${targetLanguageName}.
+- Reply strictly in ${targetLanguageName}. Do not mix any other language. Do not use Urdu unless the selected language is Urdu.
+- Every single sentence, word, explanation, title, and response MUST be 100% written in ${targetLanguageName}.
+- If the selected language is Arabic (${targetLanguageName} = Arabic), write purely in Arabic. Do not insert any Urdu or English sentences.
+- If the selected language is English, write purely in English.
+- If the selected language is Urdu, write purely in Urdu.
+- If the selected language is Sindhi, write purely in Sindhi.
+- If the selected language is Hindi, write purely in Hindi.
+- If the selected language is any other language (${targetLanguageName}), write entirely in ${targetLanguageName}.
+- Never mix languages. Never reply in Urdu when the selected language is NOT Urdu.
 =======================================================
 
 Identity & Creator Rules (Strict & Confidential):
@@ -344,19 +350,34 @@ function extractJsonMeasurements(text: string, langCode: string = 'ur'): { clean
           return { cleanText: preview, measurements: filtered };
         }
 
-        let preview = "محترم ماسٹر صاحب! ناپ کے کوائف درج ذیل ہیں:\n";
-        if (parsed.customerName) preview += `• گاہک کا نام: ${parsed.customerName}\n`;
-        if (parsed.garmentType) preview += `• لباس کی قسم: ${parsed.garmentType}\n`;
-        if (filtered.length) preview += `• لمبائی (Length): ${filtered.length}\n`;
-        if (filtered.shoulder) preview += `• تیرا (Tira): ${filtered.shoulder}\n`;
-        if (filtered.sleeves) preview += `• بازو (Bazo): ${filtered.sleeves}\n`;
-        if (filtered.chest) preview += `• سینہ (Chest): ${filtered.chest}\n`;
-        if (filtered.daaman) preview += `• گھیرا (Gheera): ${filtered.daaman}\n`;
-        if (filtered.collar) preview += `• کالر (Collar): ${filtered.collar}\n`;
-        if (filtered.shalwar) preview += `• شلوار (Shalwar): ${filtered.shalwar}\n`;
-        if (filtered.pancha) preview += `• پانچہ (Pancha): ${filtered.pancha}\n`;
-        preview += "\nبراہ کرم تصدیق فرمائیں تاکہ ناپ محفوظ ہو سکے۔";
+        if (langCode === 'ur') {
+          let preview = "محترم ماسٹر صاحب! ناپ کے کوائف درج ذیل ہیں:\n";
+          if (parsed.customerName) preview += `• گاہک کا نام: ${parsed.customerName}\n`;
+          if (parsed.garmentType) preview += `• لباس کی قسم: ${parsed.garmentType}\n`;
+          if (filtered.length) preview += `• لمبائی (Length): ${filtered.length}\n`;
+          if (filtered.shoulder) preview += `• تیرا (Tira): ${filtered.shoulder}\n`;
+          if (filtered.sleeves) preview += `• بازو (Bazo): ${filtered.sleeves}\n`;
+          if (filtered.chest) preview += `• سینہ (Chest): ${filtered.chest}\n`;
+          if (filtered.daaman) preview += `• گھیرا (Gheera): ${filtered.daaman}\n`;
+          if (filtered.collar) preview += `• کالر (Collar): ${filtered.collar}\n`;
+          if (filtered.shalwar) preview += `• شلوار (Shalwar): ${filtered.shalwar}\n`;
+          if (filtered.pancha) preview += `• پانچہ (Pancha): ${filtered.pancha}\n`;
+          preview += "\nبراہ کرم تصدیق فرمائیں تاکہ ناپ محفوظ ہو سکے۔";
+          return { cleanText: preview, measurements: filtered };
+        }
 
+        let preview = "Respected Master Tailor! Measurement details:\n";
+        if (parsed.customerName) preview += `• Customer Name: ${parsed.customerName}\n`;
+        if (parsed.garmentType) preview += `• Garment Type: ${parsed.garmentType}\n`;
+        if (filtered.length) preview += `• Length: ${filtered.length}\n`;
+        if (filtered.shoulder) preview += `• Shoulder: ${filtered.shoulder}\n`;
+        if (filtered.sleeves) preview += `• Sleeves: ${filtered.sleeves}\n`;
+        if (filtered.chest) preview += `• Chest: ${filtered.chest}\n`;
+        if (filtered.daaman) preview += `• Daaman (Hem): ${filtered.daaman}\n`;
+        if (filtered.collar) preview += `• Collar: ${filtered.collar}\n`;
+        if (filtered.shalwar) preview += `• Shalwar (Trouser): ${filtered.shalwar}\n`;
+        if (filtered.pancha) preview += `• Pancha (Bottom): ${filtered.pancha}\n`;
+        preview += "\nPlease confirm to save these measurements to the slip.";
         return { cleanText: preview, measurements: filtered };
       }
     } catch {
@@ -376,7 +397,7 @@ app.post("/api/chat", async (req, res) => {
       return res.status(400).json({ error: "Message is required" });
     }
 
-    const currentLanguage = typeof language === 'string' && language.trim() ? language.trim().toLowerCase() : 'ur';
+    const currentLanguage = typeof language === 'string' && language.trim() ? language.trim().toLowerCase() : 'en';
     const dynamicSystemInstruction = getSystemPrompt(currentLanguage);
 
     let botReply: string | null = null;

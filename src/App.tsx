@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Customer, CustomerMeasurements, SupportedLanguage, OrderStatus } from './types';
 import { translations, languageList } from './data/translations';
+import { useLanguage } from './context/LanguageContext';
+import { useLanguage } from './context/LanguageContext';
 import { DigitalSlipModal } from './components/DigitalSlipModal';
 import { AddMeasurementModal } from './components/AddMeasurementModal';
 import { ChatbotModal } from './components/ChatbotModal';
@@ -13,7 +15,7 @@ import { SlimSummaryHeader } from './components/SlimSummaryHeader';
 import { CustomDrawerMenu } from './components/CustomDrawerMenu';
 import { SplashScreen } from './components/SplashScreen';
 import { compressImageForOcr } from './utils/imageCompressor';
-import { getStatusMeta, ORDER_STATUS_LIST } from './utils/orderStatus';
+import { getStatusMeta, ORDER_STATUS_LIST, getLocalizedStatusLabel } from './utils/orderStatus';
 import { 
   auth, 
   signInWithGoogle,
@@ -61,20 +63,19 @@ import {
   Filter,
   Cloud,
   RefreshCw,
-  Zap
+  Zap,
+  Copy,
+  Check
 } from 'lucide-react';
 import { isDeliveryToday, isDeliveryLate, getDeliveryStatus } from './utils/deliveryDate';
 
 export default function AzadMasterFinalApp() {
+  const { currentLang, setLanguage: changeLanguage, t, isRtl } = useLanguage();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
-
-  const [currentLang, setCurrentLang] = useState<SupportedLanguage>(() => {
-    const saved = localStorage.getItem('azad_master_f22_lang') as SupportedLanguage;
-    return (saved && translations[saved]) ? saved : 'ur';
-  });
+  const [copiedDomain, setCopiedDomain] = useState(false);
   
   // Cloud Auto-Save States (Firebase Database)
   const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'online'>('online');
@@ -174,9 +175,6 @@ export default function AzadMasterFinalApp() {
   const [masterName, setMasterName] = useState('');
   const [masterPhone, setMasterPhone] = useState('');
   const [masterPhoto, setMasterPhoto] = useState<string | null>(null);
-
-  const t = translations[currentLang] || translations.ur;
-  const isRtl = ['ur', 'ar', 'fa', 'sd', 'ps'].includes(currentLang);
 
   // Listen to Firebase Auth state as the ONLY source of truth
   useEffect(() => {
@@ -323,11 +321,6 @@ export default function AzadMasterFinalApp() {
       setCloudSyncStatus('error');
       return { success: false, count: 0, error: err };
     }
-  };
-
-  const changeLanguage = (langKey: SupportedLanguage) => {
-    setCurrentLang(langKey);
-    localStorage.setItem('azad_master_f22_lang', langKey);
   };
 
   const handleGlobalImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -519,7 +512,7 @@ export default function AzadMasterFinalApp() {
   const handleDelete = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!currentUser) return;
-    const confirmMsg = isRtl ? 'کیا آپ اس کٹنگ سلپ کو حذف کرنا چاہتے ہیں؟' : 'Delete this slip?';
+    const confirmMsg = t.deleteConfirm || (isRtl ? 'کیا آپ اس کٹنگ سلپ کو حذف کرنا چاہتے ہیں؟' : 'Delete this slip?');
     if (window.confirm(confirmMsg)) {
       const filtered = customers.filter((item) => item.id !== id);
       setCustomers(filtered);
@@ -674,10 +667,10 @@ export default function AzadMasterFinalApp() {
               </div>
             </div>
             <h1 className="text-2xl font-black text-slate-800 tracking-wide">
-              {isRtl ? 'آزاد ماسٹر' : 'Azad Master'}
+              {t.appTitle || (isRtl ? 'آزاد ماسٹر' : 'Azad Master')}
             </h1>
             <p className="text-xs text-[#075e54] mt-0.5 font-bold">
-              {isRtl ? 'درزی ماسٹر ڈیجیٹل کلاؤڈ رجسٹر' : 'Professional Tailor Digital Cloud Register'}
+              {t.appSubtitle || (isRtl ? 'درزی ماسٹر ڈیجیٹل کلاؤڈ رجسٹر' : 'Professional Tailor Digital Cloud Register')}
             </p>
           </div>
 
@@ -685,18 +678,16 @@ export default function AzadMasterFinalApp() {
           <div className="mb-5 p-3.5 bg-[#f0faf4] border border-[#128c7e]/25 rounded-xl text-slate-700 text-xs text-left rtl:text-right space-y-1.5 shadow-2xs">
             <div className="flex items-center gap-1.5 font-bold text-[#075e54]">
               <ShieldCheck className="w-4 h-4 shrink-0 text-[#25d366]" />
-              <span>{isRtl ? '100% محفوظ اور ذاتی ریکارڈ' : '100% Secure & Private Records'}</span>
+              <span>{t.secureRecords}</span>
             </div>
             <p className="text-[11.5px] leading-relaxed text-slate-600">
-              {isRtl 
-                ? 'ہر درزی اپنے گوگل اکاؤنٹ کے ذریعے محفوظ لاگ ان کرے گا۔ آپ کے کسٹمرز، ناپ اور کھاتہ صرف آپ کو ہی نظر آئیں گے۔' 
-                : 'Each tailor securely signs in with their Google account. Your customers, measurements, and accounts remain strictly private to you.'}
+              {t.loginPrivacyNotice}
             </p>
           </div>
 
           {/* Error Message Display with Recovery Actions */}
           {authError && (
-            <div className="mb-4 p-3 bg-rose-50 border border-rose-300 rounded-xl text-rose-800 text-xs flex flex-col gap-2.5 text-left rtl:text-right animate-in fade-in">
+            <div className="mb-3 p-3 bg-rose-50 border border-rose-300 rounded-xl text-rose-800 text-xs flex flex-col gap-2.5 text-left rtl:text-right animate-in fade-in">
               <div className="flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
                 <div className="flex-1 font-medium leading-relaxed">
@@ -713,20 +704,69 @@ export default function AzadMasterFinalApp() {
                   className="px-2.5 py-1.5 bg-white hover:bg-rose-100 text-[#075e54] font-bold rounded-lg border border-slate-300 text-[11px] flex items-center gap-1 shadow-2xs transition-colors"
                 >
                   <ExternalLink className="w-3 h-3 text-[#25d366]" />
-                  <span>{isRtl ? 'نئی ٹیب میں ایپ کھولیں' : 'Open in New Tab'}</span>
+                  <span>{t.openInNewTab || (isRtl ? 'نئی ٹیب میں ایپ کھولیں' : 'Open in New Tab')}</span>
                 </a>
                 <button
                   type="button"
                   onClick={handleGoogleRedirectLogin}
                   disabled={isLoadingAuth}
-                  className="px-2.5 py-1.5 bg-[#075e54] hover:bg-[#064e46] text-white font-bold rounded-lg text-[11px] flex items-center gap-1 shadow-2xs transition-colors"
+                  className="px-2.5 py-1.5 bg-[#075e54] hover:bg-[#064e46] text-white font-bold rounded-lg text-[11px] flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
                 >
                   <LogIn className="w-3 h-3 text-amber-300" />
-                  <span>{isRtl ? 'ری ڈائریکٹ لاگ ان آزمائیں' : 'Try Redirect Login'}</span>
+                  <span>{t.tryRedirectLogin || (isRtl ? 'ری ڈائریکٹ لاگ ان آزمائیں' : 'Try Redirect Login')}</span>
                 </button>
               </div>
             </div>
           )}
+
+          {/* Current Domain Display for Firebase Authorized Domains */}
+          <div 
+            id="firebase-current-domain-box"
+            className="mb-4 p-2.5 bg-amber-50/80 border border-amber-300/70 rounded-xl text-xs flex flex-col gap-1.5 text-left rtl:text-right shadow-2xs"
+          >
+            <div className="flex items-center justify-between gap-1 text-[11px] text-amber-900 font-semibold">
+              <span>
+                {isRtl 
+                  ? 'موجودہ ڈومین (Firebase Authorized Domains):' 
+                  : 'Current Domain (Firebase Authorized Domains):'}
+              </span>
+              <button
+                type="button"
+                id="copy-domain-btn"
+                onClick={() => {
+                  if (typeof window !== 'undefined' && navigator.clipboard) {
+                    navigator.clipboard.writeText(window.location.hostname);
+                    setCopiedDomain(true);
+                    setTimeout(() => setCopiedDomain(false), 2500);
+                  }
+                }}
+                className="inline-flex items-center gap-1 text-[10.5px] bg-white hover:bg-amber-100 active:bg-amber-200 text-amber-900 border border-amber-300 font-bold px-2 py-0.5 rounded-md transition-all active:scale-95 cursor-pointer shadow-2xs"
+                title="Copy current domain to clipboard"
+              >
+                {copiedDomain ? (
+                  <>
+                    <Check className="w-3 h-3 text-emerald-600" />
+                    <span className="text-emerald-700">{isRtl ? 'کاپی ہو گیا!' : 'Copied!'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3 h-3 text-amber-800" />
+                    <span>{isRtl ? 'ڈومین کاپی کریں' : 'Copy Domain'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+            <div className="bg-white px-2.5 py-1.5 rounded-lg border border-amber-200 font-mono text-[12px] text-slate-900 select-all font-bold break-all flex items-center justify-between">
+              <span className="text-[#075e54] select-all tracking-wide">
+                {typeof window !== 'undefined' ? window.location.hostname : ''}
+              </span>
+            </div>
+            <p className="text-[10px] text-amber-800/85 leading-tight">
+              {isRtl 
+                ? 'Firebase Console > Authentication > Settings > Authorized Domains میں Add Domain پر کلک کر کے یہ ڈومین پیسٹ کریں۔' 
+                : 'Copy and paste this domain into Firebase Console > Authentication > Settings > Authorized Domains.'}
+            </p>
+          </div>
 
           {/* Real Google Sign-in Button */}
           <button 
@@ -739,7 +779,7 @@ export default function AzadMasterFinalApp() {
             {isLoadingAuth ? (
               <>
                 <RotateCw className="w-4 h-4 animate-spin text-[#075e54]" />
-                <span>{isRtl ? 'لاگ ان ہو رہا ہے...' : 'Signing in...'}</span>
+                <span>{t.signingIn}</span>
               </>
             ) : (
               <>
@@ -750,7 +790,7 @@ export default function AzadMasterFinalApp() {
                   <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
                   <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
                 </svg>
-                <span>{isRtl ? 'گوگل اکاؤنٹ سے لاگ ان کریں' : 'Sign in with Google'}</span>
+                <span>{t.signInWithGoogle}</span>
               </>
             )}
           </button>
@@ -764,7 +804,7 @@ export default function AzadMasterFinalApp() {
               className="inline-flex items-center gap-1 text-[11px] font-medium text-[#075e54] hover:text-[#128c7e] hover:underline"
             >
               <ExternalLink className="w-3 h-3" />
-              <span>{isRtl ? 'براہ راست نئی ونڈو میں کھولیں' : 'Open directly in new window'}</span>
+              <span>{t.openInNewTab || (isRtl ? 'براہ راست نئی ونڈو میں کھولیں' : 'Open directly in new window')}</span>
             </a>
           </div>
 
@@ -866,11 +906,11 @@ export default function AzadMasterFinalApp() {
               type="button"
               onClick={() => setShowChatbot(true)}
               className="px-2.5 py-1 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 border border-white/25 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-              title={isRtl ? 'آزاد ماسٹر اسسٹنٹ کھولیں' : 'Open Azad Master Assistant'}
+              title={t.navAssistant}
             >
               <Sparkles className="w-3.5 h-3.5 text-[#25d366]" />
               <span className="hidden sm:inline text-[11px] font-semibold text-[#dcf8c6]">
-                {isRtl ? 'اسسٹنٹ' : 'Assistant'}
+                {t.navAssistant}
               </span>
             </button>
           </div>
@@ -924,8 +964,9 @@ export default function AzadMasterFinalApp() {
               onClearHistory={clearAllSearchHistory}
               onRemoveHistoryItem={removeSearchHistoryItem}
               showSearchButton={true}
-              placeholder={isRtl ? 'نام یا فون نمبر تلاش کریں...' : 'Search by name or phone number...'}
+              placeholder={t.searchPlaceholder}
               isRtl={isRtl}
+              translations={t}
             />
           </div>
 
@@ -944,6 +985,7 @@ export default function AzadMasterFinalApp() {
               isTodayActive={selectedDeliveryFilter === 'today'}
               isLateActive={selectedDeliveryFilter === 'late'}
               isRtl={isRtl}
+              translations={t}
             />
 
             {/* Order Tracking & Status Filter Chips */}
@@ -951,10 +993,10 @@ export default function AzadMasterFinalApp() {
               <div className="flex items-center justify-between text-[11px] font-semibold text-[#54656f] px-0.5">
                 <span className="flex items-center gap-1 font-bold text-slate-700">
                   <span className="text-[#075e54]">⏱</span>
-                  <span>{isRtl ? 'آرڈرز ٹریکنگ سٹیٹس فلٹرز:' : 'Order Status Filters:'}</span>
+                  <span>{t.orderStatusFilters}</span>
                 </span>
                 <span className="text-[10px] text-[#075e54] font-bold bg-[#e7f7ef] border border-[#128c7e]/25 px-1.5 py-0.5 rounded">
-                  {isRtl ? `دکھائے گئے: ${filteredList.length}` : `Showing: ${filteredList.length}`}
+                  {t.showing}: {filteredList.length}
                 </span>
               </div>
 
@@ -973,7 +1015,7 @@ export default function AzadMasterFinalApp() {
                       : 'bg-white text-slate-700 border-slate-300 hover:bg-[#e7f7ef] hover:border-[#128c7e]/30'
                   }`}
                 >
-                  <span>📋 {isRtl ? 'تمام' : 'All'}</span>
+                  <span>📋 {t.allFilter}</span>
                   <span className={`px-1.5 py-0.2 rounded-full text-[9.5px] font-black ${
                     selectedStatusFilter === 'all' && selectedDeliveryFilter === 'all'
                       ? 'bg-white/25 text-white'
@@ -1003,7 +1045,7 @@ export default function AzadMasterFinalApp() {
                           : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                       }`}
                     >
-                      <span>{meta.icon} {isRtl ? meta.labelUrdu : meta.labelEn}</span>
+                      <span>{meta.icon} {getLocalizedStatusLabel(stKey, t)}</span>
                       <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
                         isSelected ? 'bg-black/15 text-inherit' : 'bg-slate-100 text-slate-600'
                       }`}>
@@ -1027,7 +1069,7 @@ export default function AzadMasterFinalApp() {
                 className="py-2 px-3 bg-[#075e54] hover:bg-[#054c44] active:scale-[0.98] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
               >
                 <span className="text-sm font-black">+</span>
-                <span>{isRtl ? 'نیا ناپ درج کریں' : 'Add Measurement'}</span>
+                <span>{t.addMeasurementBtn}</span>
               </button>
 
               <button
@@ -1037,7 +1079,7 @@ export default function AzadMasterFinalApp() {
                 className="py-2 px-3 bg-[#128c7e] hover:bg-[#0f766a] active:scale-[0.98] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
               >
                 <span>📸</span>
-                <span>{isRtl ? 'پرچہ / کپڑا فوٹو' : 'Slip / Cloth Photo'}</span>
+                <span>{t.photoOcrBtn}</span>
               </button>
             </div>
           </div>
@@ -1053,13 +1095,14 @@ export default function AzadMasterFinalApp() {
             customers={customers}
             onSelectOrder={(cust) => setActiveSlip(cust)}
             isRtl={isRtl}
+            translations={t}
           />
 
           {/* List Count and Cloud Indicator Header */}
           <div className="flex items-center justify-between px-1 py-1.5 text-xs text-[#54656f]">
             <span className="font-bold flex items-center gap-1 text-slate-700">
               <Scissors className="w-3.5 h-3.5 text-[#075e54]" />
-              <span>{isRtl ? 'گاہکوں کے ناپ رجسٹر:' : 'Customer Slips:'}</span>
+              <span>{t.customerSlipsRegister}</span>
               <span className="text-[#075e54]">({filteredList.length})</span>
             </span>
 
@@ -1068,12 +1111,12 @@ export default function AzadMasterFinalApp() {
               {cloudSyncStatus === 'syncing' ? (
                 <span className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                   <RefreshCw className="w-3 h-3 animate-spin" />
-                  <span>{isRtl ? 'سنک ہو رہا ہے...' : 'Syncing...'}</span>
+                  <span>{t.syncing}</span>
                 </span>
               ) : cloudSyncStatus === 'synced' ? (
                 <span className="flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                   <Cloud className="w-3 h-3 text-emerald-600" />
-                  <span>{isRtl ? 'کلاؤڈ محفوظ' : 'Cloud Synced'}</span>
+                  <span>{t.cloudSynced}</span>
                 </span>
               ) : (
                 <button
@@ -1082,7 +1125,7 @@ export default function AzadMasterFinalApp() {
                   className="flex items-center gap-1 text-[#075e54] hover:underline cursor-pointer"
                 >
                   <Cloud className="w-3 h-3" />
-                  <span>{isRtl ? 'سنک کریں' : 'Sync'}</span>
+                  <span>{t.tapToSync}</span>
                 </button>
               )}
             </div>
@@ -1095,14 +1138,10 @@ export default function AzadMasterFinalApp() {
                 ✂️
               </div>
               <h3 className="font-bold text-slate-700 text-sm mb-1">
-                {searchQuery 
-                  ? (isRtl ? 'کوئی گاہک نہیں ملا' : 'No customer found')
-                  : (isRtl ? 'ابھی کوئی گاہک محفوظ نہیں ہے' : 'No customers saved yet')}
+                {searchQuery ? t.noCustomerFound : t.noCustomersSaved}
               </h3>
               <p className="text-xs text-slate-500 mb-4 max-w-xs mx-auto">
-                {searchQuery
-                  ? (isRtl ? 'مختلف نام یا فون نمبر سے تلاش کریں یا نیا ناپ شامل کریں۔' : 'Try searching with another name or phone.')
-                  : (isRtl ? 'نئے گاہک کا ناپ درج کرنے کے لیے نیچے بٹن دبائیں۔' : 'Add your first customer measurement record.')}
+                {searchQuery ? t.trySearchingOther : t.addFirstCustomerHint}
               </p>
               <button
                 type="button"
@@ -1112,7 +1151,7 @@ export default function AzadMasterFinalApp() {
                 }}
                 className="px-4 py-2 bg-[#075e54] text-white rounded-xl text-xs font-bold hover:bg-[#054c44] shadow-sm cursor-pointer"
               >
-                + {isRtl ? 'پہلا ناپ درج کریں' : 'Add First Customer'}
+                + {t.addFirstCustomer}
               </button>
             </div>
           ) : (
@@ -1137,7 +1176,7 @@ export default function AzadMasterFinalApp() {
                         </div>
                         <div>
                           <h4 className="font-bold text-sm text-slate-800 group-hover:text-[#075e54] transition-colors">
-                            {customer.name || (isRtl ? 'نامعلوم گاہک' : 'Unnamed Customer')}
+                            {customer.name || t.unnamedCustomer}
                           </h4>
                           <p className="text-[11px] text-[#54656f] font-mono flex items-center gap-1" dir="ltr">
                             <Phone className="w-3 h-3 text-[#25d366]" />
@@ -1149,7 +1188,7 @@ export default function AzadMasterFinalApp() {
                       {/* Status Chip */}
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${statusMeta.badgeClass}`}>
                         <span>{statusMeta.icon}</span>
-                        <span>{isRtl ? statusMeta.labelUrdu : statusMeta.labelEn}</span>
+                        <span>{getLocalizedStatusLabel(customer.status || 'pending', t)}</span>
                       </span>
                     </div>
 
@@ -1157,13 +1196,13 @@ export default function AzadMasterFinalApp() {
                     <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px]">
                       <div className="flex items-center gap-1 text-slate-500">
                         <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{isRtl ? 'تاریخ:' : 'Date:'}</span>
+                        <span>{t.date}</span>
                         <span className="font-medium text-slate-700">{customer.date}</span>
                         {customer.deliveryDate && (
                           <span className={`ml-1 font-bold ${
                             isDelivLate ? 'text-rose-600' : isDelivToday ? 'text-emerald-700' : 'text-slate-600'
                           }`}>
-                            • {isRtl ? 'ڈیلیوری:' : 'Deliv:'} {customer.deliveryDate}
+                            • {t.deliveryDate}: {customer.deliveryDate}
                           </span>
                         )}
                       </div>
@@ -1171,11 +1210,11 @@ export default function AzadMasterFinalApp() {
                       {/* Balance amount badge */}
                       {customer.balanceAmount && Number(customer.balanceAmount) > 0 ? (
                         <span className="text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded font-bold text-[10px]">
-                          {isRtl ? `باقی: Rs ${customer.balanceAmount}` : `Bal: Rs ${customer.balanceAmount}`}
+                          {t.balance}: Rs {customer.balanceAmount}
                         </span>
                       ) : (
                         <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-bold text-[10px]">
-                          {isRtl ? 'کھاتہ صاف' : 'Cleared'}
+                          {t.clearedAccount || (isRtl ? 'کھاتہ صاف' : 'Cleared')}
                         </span>
                       )}
                     </div>
@@ -1201,10 +1240,10 @@ export default function AzadMasterFinalApp() {
               if (container) container.scrollTo({ top: 0, behavior: 'smooth' });
             }} 
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-[#e7f7ef] text-[#075e54] hover:text-[#054c44] text-xs font-bold cursor-pointer transition-all active:scale-95 border border-slate-200/80 shadow-2xs"
-            title={isRtl ? 'ہوم اسکرین' : t.navHome}
+            title={t.navHome}
           >
             <span className="text-base leading-none">🏠</span>
-            <span className="tracking-wide hidden min-[375px]:inline">{isRtl ? 'ہوم' : t.navHome}</span>
+            <span className="tracking-wide hidden min-[375px]:inline">{t.navHome}</span>
           </button>
 
           {/* AI Assistant Quick Button */}
@@ -1213,12 +1252,12 @@ export default function AzadMasterFinalApp() {
             type="button"
             onClick={() => setShowChatbot(true)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#e7f7ef] hover:bg-[#d5f0e3] text-[#075e54] text-xs font-bold cursor-pointer transition-all active:scale-95 border border-[#128c7e]/30 shadow-2xs group"
-            title={isRtl ? 'آزاد ماسٹر اسسٹنٹ' : 'Azad Master Assistant'}
+            title={t.navAssistant}
           >
             <div className="w-5 h-5 rounded-full overflow-hidden bg-white border border-amber-400/60 shadow-2xs shrink-0 group-hover:scale-110 transition-transform">
               <img src="/azad-master-logo.svg" alt="AI" className="w-full h-full object-contain" />
             </div>
-            <span className="tracking-wide text-[11.5px] font-bold">{isRtl ? 'اسسٹنٹ' : 'Assistant'}</span>
+            <span className="tracking-wide text-[11.5px] font-bold">{t.navAssistant}</span>
           </button>
 
           {/* Plus Action Button */}
@@ -1227,10 +1266,10 @@ export default function AzadMasterFinalApp() {
             type="button"
             onClick={() => setShowImageSourceModal(prev => !prev)} 
             className="azad-glow-btn glow-emerald flex items-center gap-1.5 sm:gap-2 px-4 sm:px-5 py-2.5 bg-[#075e54] hover:bg-[#054c44] text-white rounded-xl shadow-md hover:shadow-lg active:scale-95 transition-all cursor-pointer font-bold text-xs sm:text-sm"
-            title={t.addSlip}
+            title={t.navAddMeasurement}
           >
             <span className="text-lg font-black leading-none">+</span>
-            <span>{isRtl ? 'نیا ناپ' : t.addSlip}</span>
+            <span>{t.navAddMeasurement}</span>
           </button>
         </div>
 
@@ -1249,7 +1288,7 @@ export default function AzadMasterFinalApp() {
               <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
                 <p className="font-bold text-xs text-[#075e54] flex items-center gap-1.5">
                   <span>📸</span>
-                  <span>{isRtl ? 'پرچی یا کپڑے کی تصویر منتخب کریں' : 'Select Slip or Cloth Photo'}</span>
+                  <span>{t.selectSlipOrClothPhoto || (isRtl ? 'پرچی یا کپڑے کی تصویر منتخب کریں' : 'Select Slip or Cloth Photo')}</span>
                 </p>
                 <button 
                   onClick={() => setShowImageSourceModal(false)}
@@ -1269,7 +1308,7 @@ export default function AzadMasterFinalApp() {
                   className="p-3 bg-[#075e54] hover:bg-[#054c44] text-white rounded-xl flex flex-col items-center justify-center gap-1 font-bold text-xs shadow-sm active:scale-98 transition-all cursor-pointer"
                 >
                   <span className="text-xl">📷</span>
-                  <span>{isRtl ? 'کیمرہ (Camera)' : 'Camera'}</span>
+                  <span>{t.camera}</span>
                 </button>
 
                 <button 
@@ -1281,7 +1320,7 @@ export default function AzadMasterFinalApp() {
                   className="p-3 bg-[#128c7e] hover:bg-[#0f766a] text-white rounded-xl flex flex-col items-center justify-center gap-1 font-bold text-xs shadow-sm active:scale-98 transition-all cursor-pointer"
                 >
                   <span className="text-xl">🖼️</span>
-                  <span>{isRtl ? 'گیلری (Gallery)' : 'Gallery'}</span>
+                  <span>{t.gallery}</span>
                 </button>
               </div>
 
@@ -1294,7 +1333,7 @@ export default function AzadMasterFinalApp() {
                 className="w-full py-2 bg-slate-100 hover:bg-[#e7f7ef] text-slate-700 hover:text-[#075e54] rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               >
                 <span>📝</span>
-                <span>{isRtl ? 'بغیر تصویر نیا فارم بھریں' : 'Fill Form Manually'}</span>
+                <span>{t.fillFormManually || (isRtl ? 'بغیر تصویر نیا فارم بھریں' : 'Fill Form Manually')}</span>
               </button>
             </div>
           </>

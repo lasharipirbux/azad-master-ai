@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Scissors, Bot, Sparkles } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 interface SplashScreenProps {
   onFinish: () => void;
@@ -7,6 +8,7 @@ interface SplashScreenProps {
 }
 
 export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish, duration = 3200 }) => {
+  const { t, isRtl } = useLanguage();
   const [fadingOut, setFadingOut] = useState(false);
   const [progress, setProgress] = useState(0);
 
@@ -53,11 +55,11 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish, duration =
       <div className="relative z-10 w-full flex items-center justify-between max-w-sm pt-3 px-2 animate-in fade-in slide-in-from-top-4 duration-500">
         <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-[#dcf8c6] text-xs font-semibold shadow-xs">
           <Bot className="w-3.5 h-3.5 text-[#25d366]" />
-          <span>AI Assistant</span>
+          <span>{t.azadAssistant || 'AI Assistant'}</span>
         </div>
         <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-amber-300/30 text-amber-200 text-xs font-semibold shadow-xs">
           <Scissors className="w-3.5 h-3.5 text-amber-400" />
-          <span>Master Tailoring</span>
+          <span>{t.appTitle || 'Master Tailoring'}</span>
         </div>
       </div>
 
@@ -83,7 +85,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish, duration =
         </h1>
 
         <p className="text-xs sm:text-sm font-semibold text-[#dcf8c6] tracking-wide mb-6">
-          پیشہ ورانہ درزی ڈیجیٹل کسٹمر ناپ اور ریکارڈ سسٹم
+          {t.appSubTitle || (isRtl ? 'پیشہ ورانہ درزی ڈیجیٹل کسٹمر ناپ اور ریکارڈ سسٹم' : 'Professional Tailoring Digital Customer Measurement & Records')}
         </p>
 
         {/* Elegant Progress Loading Bar */}
@@ -95,7 +97,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish, duration =
         </div>
         <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-200/80">
           <Sparkles className="w-3 h-3 text-[#25d366] animate-spin" />
-          <span>لوڈ ہو رہا ہے... {progress}%</span>
+          <span>{t.loading || 'Loading...'} {progress}%</span>
         </div>
       </div>
 

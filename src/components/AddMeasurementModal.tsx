@@ -79,9 +79,9 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
   const handleStatusClick = (st: OrderStatus) => {
     if (isStatusLocked && st !== 'delivered') {
       const confirmUnlock = window.confirm(
-        isRtl 
+        t.orderLockedNotice || (isRtl 
           ? "⚠️ یہ آرڈر مکمل (Delivered) ہو چکا ہے اور لاک ہے۔ کیا آپ واقعی اسے دوبارہ ان لاک کر کے اسٹیٹس تبدیل کرنا چاہتے ہیں؟"
-          : "⚠️ This order is Marked as Delivered and Locked. Do you want to unlock and change status?"
+          : "⚠️ This order is Marked as Delivered and Locked. Do you want to unlock and change status?")
       );
       if (!confirmUnlock) return;
       setIsStatusLocked(false);
@@ -91,6 +91,15 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
     if (st === 'delivered') {
       setIsStatusLocked(true);
     }
+  };
+
+  const getStatusLabel = (st: OrderStatus): string => {
+    if (st === 'pending') return t.statusPending || 'Pending';
+    if (st === 'cutting') return t.statusCutting || 'Cutting';
+    if (st === 'stitching') return t.statusStitching || 'Stitching';
+    if (st === 'ready') return t.statusReady || 'Ready';
+    if (st === 'delivered') return t.statusDelivered || 'Delivered';
+    return st;
   };
 
   // Accounts & Billing
@@ -496,7 +505,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                 AZAD MASTER
               </h1>
               <span className="text-[10px] text-emerald-200/90 font-medium leading-none">
-                {isRtl ? 'کسٹمر ناپ و سلپ فارم' : 'Customer Slip Form'}
+                {t.customerDetailsHeading || (isRtl ? 'کسٹمر ناپ و سلپ فارم' : 'Customer Slip Form')}
               </span>
             </div>
           </div>
@@ -515,7 +524,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
             >
               <span className="text-xs">{isCuttingMode ? '📝' : '✂️'}</span>
               <span className="whitespace-nowrap">
-                {isCuttingMode ? (isRtl ? 'نارمل موڈ' : 'Normal') : (isRtl ? 'کٹنگ موڈ' : 'Cutting Mode')}
+                {isCuttingMode ? (t.normalMode || 'Normal') : (t.cuttingMode || 'Cutting Mode')}
               </span>
             </button>
 
@@ -525,7 +534,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
               type="button"
               onClick={onClose}
               className="w-8 h-8 rounded-xl bg-white/15 hover:bg-rose-600/90 flex items-center justify-center text-white transition-all cursor-pointer text-sm font-bold active:scale-95 border border-white/15 shadow-2xs"
-              title={isRtl ? 'بند کریں' : 'Close'}
+              title={t.close}
             >
               ✕
             </button>
@@ -539,7 +548,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
           <div className="bg-white p-3.5 rounded-xl shadow-xs border border-gray-100 mb-1 shrink-0">
             <div className="flex items-center justify-between mb-2">
               <label className="block text-xs font-bold text-gray-700">
-                {isRtl ? 'کسٹمر کی تصویر یا نام کا پہلا حرف' : 'Customer Photo or Initial Letter'}
+                {t.customerName || (isRtl ? 'کسٹمر کی تصویر یا نام کا پہلا حرف' : 'Customer Photo or Initial Letter')}
               </label>
               <div className="flex items-center gap-1.5">
                 <button
@@ -554,7 +563,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                   className="text-[10.5px] bg-[#075e54] hover:bg-[#054c44] text-white px-2.5 py-1 rounded-lg font-bold transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 shadow-2xs border border-[#128c7e]/40"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-[#25d366]" />
-                  <span>{isRtl ? 'اسسٹنٹ' : 'Assistant'}</span>
+                  <span>{t.assistant}</span>
                 </button>
                 <button
                   type="button"
@@ -592,7 +601,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                       e.stopPropagation();
                       setImageUri(null);
                     }}
-                    title={isRtl ? "تصویر ہٹائیں" : "Remove photo"}
+                    title={t.removePhoto || "Remove photo"}
                     className="absolute inset-0 bg-[#062c1d]/60 text-white opacity-0 hover:opacity-100 flex items-center justify-center text-[10px] font-bold transition-opacity cursor-pointer"
                   >
                     ✕
@@ -608,7 +617,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                   id="customerNameInput" 
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder={isRtl ? "کسٹمر کا نام لکھیں" : "Customer name"} 
+                  placeholder={t.customerName || (isRtl ? "کسٹمر کا نام لکھیں" : "Customer name")} 
                   className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white" 
                   required
                 />
@@ -652,7 +661,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                     className="glow-button glow-indigo flex-1 py-1.5 px-3 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-medium hover:bg-indigo-100 transition border border-indigo-200 cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
                   >
                     <span>📸</span>
-                    <span>{isRtl ? 'فوٹو لیں یا گیلری سے لگائیں' : 'Take Photo or Choose Gallery'}</span>
+                    <span>{t.uploadPhotoTitle || (isRtl ? 'فوٹو لیں یا گیلری سے لگائیں' : 'Take Photo or Choose Gallery')}</span>
                   </button>
 
                   {imageUri && (
@@ -661,7 +670,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                       onClick={() => setImageUri(null)}
                       className="text-red-600 hover:text-red-700 text-[11px] font-bold px-2 py-1 hover:bg-red-50 rounded-lg border border-red-200 transition-colors shrink-0 cursor-pointer"
                     >
-                      {isRtl ? 'حذف' : 'Remove'}
+                      {t.removePhoto || (isRtl ? 'حذف' : 'Remove')}
                     </button>
                   )}
                 </div>
@@ -669,7 +678,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                 {isOcrScanning && (
                   <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold animate-pulse">
                     <span className="text-sm">⚡</span>
-                    <span>{isRtl ? 'پرچے سے ناپ پڑھی جا رہی ہے، چند سیکنڈ انتظار فرمائیں...' : 'Reading measurements from receipt, please wait...'}</span>
+                    <span>{t.extractingOcr || (isRtl ? 'پرچے سے ناپ پڑھی جا رہی ہے، چند سیکنڈ انتظار فرمائیں...' : 'Reading measurements from receipt, please wait...')}</span>
                   </div>
                 )}
               </div>
@@ -718,65 +727,65 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                   <div className="flex items-center justify-between pb-1 border-b border-slate-200">
                     <span className="font-bold text-emerald-900 flex items-center gap-1 text-[11px]">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
-                      {isRtl ? 'ناپ کا مکمل جائزہ (Preview)' : 'Measurement Preview'}
+                      {t.measurementPreviewTitle || (isRtl ? 'ناپ کا مکمل جائزہ' : 'Measurement Preview')}
                     </span>
                     <span className="text-[9px] bg-amber-100 text-amber-900 font-bold px-1.5 py-0.2 rounded">
-                      {isRtl ? 'تصدیق درکار ہے' : 'Confirmation Needed'}
+                      {t.needsConfirmation || (isRtl ? 'تصدیق درکار ہے' : 'Confirmation Needed')}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-1 text-[10px]">
                     {aiPreviewData.length && (
                       <div className="bg-slate-50 p-1 rounded border border-slate-200 flex justify-between">
-                        <span className="text-slate-500">لمبائی:</span>
+                        <span className="text-slate-500">{t.lengthLabel}:</span>
                         <span className="font-bold text-slate-900">{aiPreviewData.length}</span>
                       </div>
                     )}
                     {aiPreviewData.shoulder && (
                       <div className="bg-slate-50 p-1 rounded border border-slate-200 flex justify-between">
-                        <span className="text-slate-500">تیرہ:</span>
+                        <span className="text-slate-500">{t.shoulderLabel}:</span>
                         <span className="font-bold text-slate-900">{aiPreviewData.shoulder}</span>
                       </div>
                     )}
                     {aiPreviewData.sleeves && (
                       <div className="bg-slate-50 p-1 rounded border border-slate-200 flex justify-between">
-                        <span className="text-slate-500">بازو:</span>
+                        <span className="text-slate-500">{t.sleevesLabel}:</span>
                         <span className="font-bold text-slate-900">{aiPreviewData.sleeves}</span>
                       </div>
                     )}
                     {aiPreviewData.chest && (
                       <div className="bg-slate-50 p-1 rounded border border-slate-200 flex justify-between">
-                        <span className="text-slate-500">چھاتی:</span>
+                        <span className="text-slate-500">{t.chestLabel}:</span>
                         <span className="font-bold text-slate-900">{aiPreviewData.chest}</span>
                       </div>
                     )}
                     {aiPreviewData.waist && (
                       <div className="bg-slate-50 p-1 rounded border border-slate-200 flex justify-between">
-                        <span className="text-slate-500">کمر:</span>
+                        <span className="text-slate-500">{t.waistLabel}:</span>
                         <span className="font-bold text-slate-900">{aiPreviewData.waist}</span>
                       </div>
                     )}
                     {aiPreviewData.daaman && (
                       <div className="bg-slate-50 p-1 rounded border border-slate-200 flex justify-between">
-                        <span className="text-slate-500">گھیر:</span>
+                        <span className="text-slate-500">{t.daamanLabel}:</span>
                         <span className="font-bold text-slate-900">{aiPreviewData.daaman}</span>
                       </div>
                     )}
                     {aiPreviewData.collar && (
                       <div className="bg-slate-50 p-1 rounded border border-slate-200 flex justify-between">
-                        <span className="text-slate-500">کالر:</span>
+                        <span className="text-slate-500">{t.collarLabel}:</span>
                         <span className="font-bold text-slate-900">{aiPreviewData.collar}</span>
                       </div>
                     )}
                     {aiPreviewData.shalwar && (
                       <div className="bg-slate-50 p-1 rounded border border-slate-200 flex justify-between">
-                        <span className="text-slate-500">شلوار:</span>
+                        <span className="text-slate-500">{t.shalwarLabel}:</span>
                         <span className="font-bold text-slate-900">{aiPreviewData.shalwar}</span>
                       </div>
                     )}
                     {aiPreviewData.pancha && (
                       <div className="bg-slate-50 p-1 rounded border border-slate-200 flex justify-between">
-                        <span className="text-slate-500">پانچا:</span>
+                        <span className="text-slate-500">{t.panchaLabel}:</span>
                         <span className="font-bold text-slate-900">{aiPreviewData.pancha}</span>
                       </div>
                     )}
@@ -789,14 +798,14 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                       className="flex-1 py-1 px-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
                     >
                       <Check className="w-3.5 h-3.5" />
-                      {isRtl ? 'تصدیق کریں' : 'Confirm'}
+                      {t.confirmAndApplySlip || (isRtl ? 'تصدیق کریں' : 'Confirm')}
                     </button>
                     <button
                       type="button"
                       onClick={() => setAiPreviewData(null)}
                       className="py-1 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors cursor-pointer"
                     >
-                      {isRtl ? 'منسوخ' : 'Cancel'}
+                      {t.cancel}
                     </button>
                   </div>
                 </div>
@@ -809,7 +818,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
             
             <div className="flex justify-between items-center border-b border-emerald-100 pb-1 mb-1 shrink-0">
               <span className="text-[11px] font-bold text-emerald-800">
-                📏 Measurement Slip (Inches)
+                📏 {t.measurementsHeading || 'Measurement Slip (Inches)'}
               </span>
               <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded">
                 Inch
@@ -845,7 +854,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
               {/* 1. Length */}
               <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border transition-all ${isCuttingMode ? 'bg-amber-50 border-amber-300' : 'bg-white border-slate-200'}`}>
                 <span className={`font-bold text-[11px] ${isCuttingMode ? 'text-amber-950 font-black' : 'text-slate-700'}`}>
-                  Length (لمبائی)
+                  {t.lengthLabel}
                 </span>
                 <input 
                   type="text" 
@@ -862,7 +871,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
               {/* 2. Shoulder */}
               <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border transition-all ${isCuttingMode ? 'bg-amber-50 border-amber-300' : 'bg-white border-slate-200'}`}>
                 <span className={`font-bold text-[11px] ${isCuttingMode ? 'text-amber-950 font-black' : 'text-slate-700'}`}>
-                  Shoulder (تیرہ)
+                  {t.shoulderLabel}
                 </span>
                 <input 
                   type="text" 
@@ -879,7 +888,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
               {/* 3. Sleeve */}
               <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border transition-all ${isCuttingMode ? 'bg-amber-50 border-amber-300' : 'bg-white border-slate-200'}`}>
                 <span className={`font-bold text-[11px] ${isCuttingMode ? 'text-amber-950 font-black' : 'text-slate-700'}`}>
-                  Sleeve (بازو)
+                  {t.sleevesLabel}
                 </span>
                 <input 
                   type="text" 
@@ -896,7 +905,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
               {/* 4. Chest */}
               <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border transition-all ${isCuttingMode ? 'bg-amber-50 border-amber-300' : 'bg-white border-slate-200'}`}>
                 <span className={`font-bold text-[11px] ${isCuttingMode ? 'text-amber-950 font-black' : 'text-slate-700'}`}>
-                  Chest (چھاتی)
+                  {t.chestLabel}
                 </span>
                 <input 
                   type="text" 
@@ -913,7 +922,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
               {/* 5. Waist */}
               <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border transition-all ${isCuttingMode ? 'bg-amber-50 border-amber-300' : 'bg-white border-slate-200'}`}>
                 <span className={`font-bold text-[11px] ${isCuttingMode ? 'text-amber-950 font-black' : 'text-slate-700'}`}>
-                  Waist (کمر)
+                  {t.waistLabel}
                 </span>
                 <input 
                   type="text" 
@@ -930,7 +939,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
               {/* 6. Daaman */}
               <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border transition-all ${isCuttingMode ? 'bg-amber-50 border-amber-300' : 'bg-white border-slate-200'}`}>
                 <span className={`font-bold text-[11px] ${isCuttingMode ? 'text-amber-950 font-black' : 'text-slate-700'}`}>
-                  Daaman (گھیر)
+                  {t.daamanLabel}
                 </span>
                 <input 
                   type="text" 
@@ -947,7 +956,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
               {/* 7. Collar / Ban */}
               <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border transition-all ${isCuttingMode ? 'bg-amber-50 border-amber-300' : 'bg-white border-slate-200'}`}>
                 <span className={`font-bold text-[11px] ${isCuttingMode ? 'text-amber-950 font-black' : 'text-slate-700'}`}>
-                  Collar / Ban (کالر/بین)
+                  {t.collarLabel}
                 </span>
                 <input 
                   type="text" 
@@ -964,7 +973,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
               {/* 8. Shalwar */}
               <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border transition-all ${isCuttingMode ? 'bg-amber-50 border-amber-300' : 'bg-white border-slate-200'}`}>
                 <span className={`font-bold text-[11px] ${isCuttingMode ? 'text-amber-950 font-black' : 'text-slate-700'}`}>
-                  Shalwar (شلوار)
+                  {t.shalwarLabel}
                 </span>
                 <input 
                   type="text" 
@@ -981,7 +990,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
               {/* 9. Pancha */}
               <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border transition-all ${isCuttingMode ? 'bg-amber-50 border-amber-300' : 'bg-white border-slate-200'}`}>
                 <span className={`font-bold text-[11px] ${isCuttingMode ? 'text-amber-950 font-black' : 'text-slate-700'}`}>
-                  Pancha (پانچا)
+                  {t.panchaLabel}
                 </span>
                 <input 
                   type="text" 
@@ -1003,14 +1012,14 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                 type="text" 
                 value={pocket} 
                 onChange={(e) => setPocket(e.target.value)} 
-                placeholder="پکٹ / جیب..."
+                placeholder={t.pocketLabel || "پکٹ / جیب..."}
                 className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-[10px] text-slate-700 outline-none"
               />
               <input 
                 type="text" 
                 value={specialNotes} 
                 onChange={(e) => setSpecialNotes(e.target.value)} 
-                placeholder="خصوصی ہدایات..."
+                placeholder={t.specialNotesLabel || "خصوصی ہدایات..."}
                 className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-[10px] text-slate-700 outline-none"
               />
             </div>
@@ -1024,7 +1033,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
               <div className="flex items-center justify-between text-[11px] font-bold text-emerald-950">
                 <span className="flex items-center gap-1.5">
                   <Wallet className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>{isRtl ? 'سلائی کھاتہ و اجرت (Tailoring Bill & Advance):' : 'Tailoring Bill & Payment:'}</span>
+                  <span>{t.billingHeading || (isRtl ? 'سلائی کھاتہ و اجرت' : 'Tailoring Bill & Payment:')}</span>
                 </span>
                 {totalAmount ? (
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
@@ -1033,8 +1042,8 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                       : 'bg-amber-100 text-amber-900 border-amber-300'
                   }`}>
                     {(parseFloat(totalAmount) || 0) > 0 && Math.max(0, (parseFloat(totalAmount) || 0) - (parseFloat(advanceAmount) || 0)) === 0 
-                      ? (isRtl ? '✓ مکمل وصول (Paid)' : '✓ Full Paid') 
-                      : `${isRtl ? 'بقایا واجب الادا' : 'Balance'}: Rs. ${Math.max(0, (parseFloat(totalAmount) || 0) - (parseFloat(advanceAmount) || 0))}`}
+                      ? (t.fullyPaidBadge || '✓ Paid') 
+                      : `${t.balanceDueBadge || 'Balance'}: Rs. ${Math.max(0, (parseFloat(totalAmount) || 0) - (parseFloat(advanceAmount) || 0))}`}
                   </span>
                 ) : null}
               </div>
@@ -1043,7 +1052,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                 {/* Total Stitching Charge */}
                 <div>
                   <label className="block text-[10px] font-bold text-slate-700 mb-0.5">
-                    {isRtl ? 'کل اجرت (Rs):' : 'Total (Rs):'}
+                    {t.totalAmountLabel} (Rs):
                   </label>
                   <input 
                     id="modal-total-amount-input"
@@ -1051,7 +1060,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                     min="0"
                     value={totalAmount}
                     onChange={(e) => setTotalAmount(e.target.value)}
-                    placeholder="مثلاً 1500"
+                    placeholder="1500"
                     className="w-full px-2 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs font-bold text-emerald-950 outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
                   />
                 </div>
@@ -1059,7 +1068,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                 {/* Advance Paid */}
                 <div>
                   <label className="block text-[10px] font-bold text-slate-700 mb-0.5">
-                    {isRtl ? 'پیشگی / ایڈوانس:' : 'Advance (Rs):'}
+                    {t.advanceAmountLabel} (Rs):
                   </label>
                   <input 
                     id="modal-advance-amount-input"
@@ -1067,7 +1076,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                     min="0"
                     value={advanceAmount}
                     onChange={(e) => setAdvanceAmount(e.target.value)}
-                    placeholder="مثلاً 500"
+                    placeholder="500"
                     className="w-full px-2 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs font-bold text-emerald-900 outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
                   />
                 </div>
@@ -1075,7 +1084,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                 {/* Balance (Auto calculated) */}
                 <div>
                   <label className="block text-[10px] font-bold text-slate-700 mb-0.5">
-                    {isRtl ? 'بقایا رقم (Balance):' : 'Balance (Rs):'}
+                    {t.balanceAmountLabel} (Rs):
                   </label>
                   <div className={`w-full px-2 py-1.5 rounded-lg text-xs font-extrabold flex items-center justify-between border shadow-2xs ${
                     (parseFloat(totalAmount) || 0) > 0 && Math.max(0, (parseFloat(totalAmount) || 0) - (parseFloat(advanceAmount) || 0)) === 0
@@ -1099,21 +1108,21 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                     onClick={() => setAdvanceAmount(totalAmount)}
                     className="text-[9.5px] px-2 py-0.5 bg-white hover:bg-emerald-100 text-emerald-800 font-bold rounded-md border border-emerald-300 transition-colors cursor-pointer"
                   >
-                    {isRtl ? '✓ پورا ادا (Full)' : 'Full'}
+                    ✓ {t.fullyPaidBadge || 'Full'}
                   </button>
                   <button
                     type="button"
                     onClick={() => setAdvanceAmount(String(Math.round((parseFloat(totalAmount) || 0) / 2)))}
                     className="text-[9.5px] px-2 py-0.5 bg-white hover:bg-emerald-100 text-emerald-800 font-bold rounded-md border border-emerald-300 transition-colors cursor-pointer"
                   >
-                    {isRtl ? '50% پیشگی' : '50%'}
+                    50%
                   </button>
                   <button
                     type="button"
                     onClick={() => setAdvanceAmount('0')}
                     className="text-[9.5px] px-2 py-0.5 bg-white hover:bg-slate-100 text-slate-600 font-bold rounded-md border border-slate-200 transition-colors cursor-pointer"
                   >
-                    {isRtl ? '0 ایڈوانس' : '0 Advance'}
+                    0
                   </button>
                 </div>
               )}
@@ -1124,22 +1133,22 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
               <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
                 <span className="flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{isRtl ? 'آرڈر کی حالت (Order Status):' : 'Order Status:'}</span>
+                  <span>{t.orderStatusLabel || 'Order Status:'}</span>
                 </span>
                 <div className="flex items-center gap-1.5">
                   {orderStatus === 'delivered' ? (
                     <span className="text-[9.5px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-950 border border-emerald-300 flex items-center gap-1">
                       <span>🔒</span>
-                      <span>{isRtl ? 'پکا / لاک شدہ' : 'Locked'}</span>
+                      <span>{t.orderLockedBadge || 'Locked'}</span>
                     </span>
                   ) : (
                     <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-1">
                       <span>🔓</span>
-                      <span>{isRtl ? 'تبدیل ہو سکتا ہے' : 'Unlocked'}</span>
+                      <span>{t.orderUnlockedBadge || 'Unlocked'}</span>
                     </span>
                   )}
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getStatusMeta(orderStatus).badgeClass}`}>
-                    {getStatusMeta(orderStatus).icon} {isRtl ? getStatusMeta(orderStatus).shortUrdu : getStatusMeta(orderStatus).labelEn}
+                    {getStatusMeta(orderStatus).icon} {getStatusLabel(orderStatus)}
                   </span>
                 </div>
               </div>
@@ -1160,7 +1169,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                       }`}
                     >
                       <span className="text-[11px] leading-none">{meta.icon}</span>
-                      <span className="truncate w-full text-center">{isRtl ? meta.shortUrdu : meta.labelEn}</span>
+                      <span className="truncate w-full text-center">{getStatusLabel(st)}</span>
                     </button>
                   );
                 })}
@@ -1172,7 +1181,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
               <div className="flex items-center justify-between text-[11px] font-bold text-slate-800">
                 <span className="flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>{isRtl ? 'تاریخ واپسی / ڈیلیوری (Delivery Date):' : 'Delivery Date:'}</span>
+                  <span>{t.deliveryDateLabel || 'Delivery Date:'}</span>
                 </span>
                 {deliveryDate && (
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${
@@ -1182,10 +1191,10 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                       ? 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse'
                       : 'bg-emerald-50 text-emerald-800 border-emerald-300'
                   }`}>
-                    {getDeliveryStatus(deliveryDate, orderStatus) === 'late' && '⚠️ تاخیر شدہ'}
-                    {getDeliveryStatus(deliveryDate, orderStatus) === 'today' && '⚡ آج کی ڈیلیوری'}
-                    {getDeliveryStatus(deliveryDate, orderStatus) === 'upcoming' && '📅 مقررہ وقت'}
-                    {getDeliveryStatus(deliveryDate, orderStatus) === 'delivered' && '✅ مکمل تحویل'}
+                    {getDeliveryStatus(deliveryDate, orderStatus) === 'late' && (t.lateOrderBadge || '⚠️ Late')}
+                    {getDeliveryStatus(deliveryDate, orderStatus) === 'today' && (t.dueTodayBadge || '⚡ Today')}
+                    {getDeliveryStatus(deliveryDate, orderStatus) === 'upcoming' && (t.upcomingBadge || '📅 Upcoming')}
+                    {getDeliveryStatus(deliveryDate, orderStatus) === 'delivered' && (t.statusDelivered || '✅ Delivered')}
                   </span>
                 )}
               </div>
@@ -1213,7 +1222,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                       : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
                   }`}
                 >
-                  ⚡ {isRtl ? 'آج (Today)' : 'Today'}
+                  ⚡ {t.quickToday || 'Today'}
                 </button>
                 <button
                   type="button"
@@ -1224,7 +1233,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                       : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
                   }`}
                 >
-                  {isRtl ? 'کل (Tomorrow)' : 'Tomorrow'}
+                  {t.quickTomorrow || 'Tomorrow'}
                 </button>
                 <button
                   type="button"
@@ -1235,7 +1244,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                       : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
                   }`}
                 >
-                  {isRtl ? '۳ دن' : '3 Days'}
+                  {t.quick3Days || '3 Days'}
                 </button>
                 <button
                   type="button"
@@ -1246,7 +1255,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                       : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
                   }`}
                 >
-                  {isRtl ? '۱ ہفتہ' : '1 Week'}
+                  {t.quick1Week || '1 Week'}
                 </button>
                 <button
                   type="button"
@@ -1257,7 +1266,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                       : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
                   }`}
                 >
-                  {isRtl ? '۱۰ دن' : '10 Days'}
+                  {t.quick10Days || '10 Days'}
                 </button>
               </div>
             </div>
@@ -1266,15 +1275,15 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
             <div className="flex items-center justify-between bg-white p-2 rounded-xl border border-slate-200">
               <span className="text-[11px] font-semibold text-slate-600 flex items-center gap-1">
                 <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
-                {imageUri ? '✓ فوٹو منسلک ہے' : 'پرچہ / کپڑا فوٹو'}
+                {imageUri ? (t.savedSuccess || '✓ Photo Attached') : (t.paperSlipPhoto || (isRtl ? 'پرچہ / کپڑا فوٹو' : 'Paper / Cloth Photo'))}
               </span>
               <div className="flex gap-1.5">
                 <label className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-2 py-1 rounded text-[10px] font-bold border border-emerald-200 cursor-pointer transition-colors">
-                  <span>گیلری</span>
+                  <span>{t.gallery}</span>
                   <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                 </label>
                 <label className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-2 py-1 rounded text-[10px] font-bold border border-emerald-200 cursor-pointer transition-colors">
-                  <span>کیمرہ</span>
+                  <span>{t.camera}</span>
                   <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" />
                 </label>
                 {imageUri && (
@@ -1283,7 +1292,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                     onClick={() => setImageUri(null)}
                     className="text-red-600 text-[10px] font-bold px-1.5 py-1 hover:bg-red-50 rounded"
                   >
-                    حذف
+                    {t.delete || (isRtl ? 'حذف' : 'Delete')}
                   </button>
                 )}
               </div>

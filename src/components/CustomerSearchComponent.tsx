@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Customer } from '../types';
+import { TranslationDictionary } from '../data/translations';
 
 export interface CustomerSearchComponentProps {
   customers: Customer[];
@@ -14,6 +15,7 @@ export interface CustomerSearchComponentProps {
   placeholder?: string;
   showSearchButton?: boolean;
   isRtl?: boolean;
+  translations?: TranslationDictionary;
 }
 
 /**
@@ -35,6 +37,7 @@ export const CustomerSearchComponent: React.FC<CustomerSearchComponentProps> = (
   placeholder,
   showSearchButton = true,
   isRtl = true,
+  translations,
 }) => {
   const [internalQuery, setInternalQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -52,7 +55,7 @@ export const CustomerSearchComponent: React.FC<CustomerSearchComponentProps> = (
   };
 
   // کسٹمر کو نام یا فون نمبر سے فلٹر کرنے کا فنکشن
-  const filteredCustomers = customers.filter(c => {
+  const filteredCustomers = customers.filter((c) => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return false;
     const matchName = c.name?.toLowerCase().includes(q);
@@ -63,7 +66,7 @@ export const CustomerSearchComponent: React.FC<CustomerSearchComponentProps> = (
   });
 
   // فلٹر شدہ پچھلی تلاشیں
-  const matchingHistory = (searchHistory || []).filter(item => {
+  const matchingHistory = (searchHistory || []).filter((item) => {
     const q = searchQuery.toLowerCase().trim();
     return q && item.toLowerCase().includes(q);
   });
@@ -79,9 +82,9 @@ export const CustomerSearchComponent: React.FC<CustomerSearchComponentProps> = (
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const defaultPlaceholder = isRtl
-    ? 'نام یا فون نمبر تلاش کریں...'
-    : 'Search by name or phone number...';
+  const defaultPlaceholder =
+    translations?.searchPlaceholder ||
+    (isRtl ? 'نام یا فون نمبر تلاش کریں...' : 'Search by name or phone number...');
 
   const handleSubmit = () => {
     if (onSearchSubmit) {
@@ -90,8 +93,18 @@ export const CustomerSearchComponent: React.FC<CustomerSearchComponentProps> = (
     setIsFocused(false);
   };
 
+  const clearLabel = translations?.clear || (isRtl ? 'صاف کریں' : 'Clear');
+  const searchActionLabel = translations?.searchAction || (isRtl ? 'تلاش' : 'Search');
+  const recentSearchesLabel = translations?.recentSearches || (isRtl ? 'پچھلی تلاش' : 'Recent Searches');
+  const openSlipLabel = translations?.openSlip || (isRtl ? 'سلپ کھولیں' : 'Open');
+  const tapToAddCustomerLabel =
+    translations?.tapToAddCustomer ||
+    (isRtl ? 'کوئی گاہک نہیں ملا۔ نیا شامل کرنے کے لیے یہاں کلک کریں۔' : 'No customer found. Tap to add new.');
+  const addAsNewCustomerLabel =
+    translations?.addAsNewCustomer || (isRtl ? 'کا نیا ناپ درج کریں' : 'as New Customer');
+
   return (
-    <div 
+    <div
       ref={containerRef}
       id="customer-search-component"
       className="w-full relative z-40"
@@ -120,8 +133,10 @@ export const CustomerSearchComponent: React.FC<CustomerSearchComponentProps> = (
           />
 
           {/* سرچ آئیکن */}
-          <span 
-            className={`absolute ${isRtl ? 'right-2.5' : 'left-2.5'} top-2.5 text-slate-400 text-xs pointer-events-none select-none`}
+          <span
+            className={`absolute ${
+              isRtl ? 'right-2.5' : 'left-2.5'
+            } top-2.5 text-slate-400 text-xs pointer-events-none select-none`}
           >
             🔍
           </span>
@@ -141,7 +156,7 @@ export const CustomerSearchComponent: React.FC<CustomerSearchComponentProps> = (
                     setIsFocused(false);
                   }}
                   className="w-4.5 h-4.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-600 flex items-center justify-center text-[10px] cursor-pointer transition-colors"
-                  title={isRtl ? 'صاف کریں' : 'Clear'}
+                  title={clearLabel}
                 >
                   ✕
                 </button>
@@ -151,20 +166,20 @@ export const CustomerSearchComponent: React.FC<CustomerSearchComponentProps> = (
         </div>
 
         {showSearchButton && (
-          <button 
+          <button
             id="searchSubmitBtn"
             type="button"
             onClick={handleSubmit}
             className="glow-button glow-emerald bg-[#075e54] hover:bg-[#054c44] text-white px-3.5 h-[38px] sm:h-[40px] rounded-xl text-xs sm:text-sm font-bold shadow-xs flex items-center gap-1 shrink-0 transition-all cursor-pointer active:scale-95"
           >
-            <span>{isRtl ? 'تلاش' : 'Search'}</span>
+            <span>{searchActionLabel}</span>
           </button>
         )}
       </div>
 
       {/* سجیشن لسٹ جو صرف اس وقت نظر آئے گی جب یوزر کچھ ٹائپ کرے گا، اس سے فالتو جگہ نہیں گھیرے گی */}
       {isFocused && searchQuery.trim().length > 0 && (
-        <div 
+        <div
           id="customer-suggestions-container"
           className="absolute top-[50px] left-0 right-0 bg-white rounded-xl border border-slate-300 max-h-[200px] overflow-y-auto shadow-2xl z-50 divide-y divide-slate-100 animate-in fade-in duration-100"
         >
@@ -172,18 +187,18 @@ export const CustomerSearchComponent: React.FC<CustomerSearchComponentProps> = (
           {matchingHistory.length > 0 && (
             <div className="p-1.5 bg-slate-50/80">
               <div className="flex items-center justify-between px-2 py-0.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                <span>{isRtl ? 'پچھلی تلاش' : 'Recent Searches'}</span>
+                <span>{recentSearchesLabel}</span>
                 {onClearHistory && (
-                  <button 
+                  <button
                     type="button"
                     onClick={onClearHistory}
                     className="text-slate-400 hover:text-rose-600 text-[10px] cursor-pointer"
                   >
-                    {isRtl ? 'صاف کریں' : 'Clear'}
+                    {clearLabel}
                   </button>
                 )}
               </div>
-              {matchingHistory.map(item => (
+              {matchingHistory.map((item) => (
                 <div
                   key={item}
                   onClick={() => {
@@ -237,13 +252,13 @@ export const CustomerSearchComponent: React.FC<CustomerSearchComponentProps> = (
                     {item.phone}
                   </span>
                   <span className="text-[11px] bg-[#075e54] text-white px-2 py-0.5 rounded-md font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                    {isRtl ? 'سلپ کھولیں' : 'Open'}
+                    {openSlipLabel}
                   </span>
                 </div>
               </div>
             ))
           ) : (
-            <div 
+            <div
               id="noCustomerResult"
               onClick={() => {
                 if (onAddNewCustomer) {
@@ -252,19 +267,15 @@ export const CustomerSearchComponent: React.FC<CustomerSearchComponentProps> = (
                 }
               }}
               className={`p-3.5 text-center ${
-                onAddNewCustomer 
-                  ? 'cursor-pointer hover:bg-amber-50 text-amber-900 transition-colors' 
+                onAddNewCustomer
+                  ? 'cursor-pointer hover:bg-amber-50 text-amber-900 transition-colors'
                   : 'text-slate-500'
               }`}
             >
-              <p className="text-sm font-semibold">
-                {isRtl 
-                  ? 'کوئی گاہک نہیں ملا۔ نیا شامل کرنے کے لیے یہاں کلک کریں۔' 
-                  : 'No customer found. Tap to add new.'}
-              </p>
+              <p className="text-sm font-semibold">{tapToAddCustomerLabel}</p>
               {onAddNewCustomer && (
                 <span className="inline-block mt-1 text-xs font-bold text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-lg">
-                  ➕ {isRtl ? `"${searchQuery}" کا نیا ناپ درج کریں` : `Add "${searchQuery}" as New Customer`}
+                  ➕ "{searchQuery}" {addAsNewCustomerLabel}
                 </span>
               )}
             </div>

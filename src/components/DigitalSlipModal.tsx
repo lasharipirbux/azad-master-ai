@@ -48,15 +48,24 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
   const [currentStatus, setCurrentStatus] = useState<OrderStatus>(slip.status || 'pending');
   const [isStatusLocked, setIsStatusLocked] = useState<boolean>(slip.status === 'delivered');
 
+  const getStatusLabel = (st: OrderStatus): string => {
+    if (st === 'pending') return t.statusPending || 'Pending';
+    if (st === 'cutting') return t.statusCutting || 'Cutting';
+    if (st === 'stitching') return t.statusStitching || 'Stitching';
+    if (st === 'ready') return t.statusReady || 'Ready';
+    if (st === 'delivered') return t.statusDelivered || 'Delivered';
+    return st;
+  };
+
   const cleanPhoneForWhatsApp = slip.phone.replace(/[^0-9]/g, '');
   const statusMeta = getStatusMeta(currentStatus);
 
   const handleStatusChange = (newStatus: OrderStatus) => {
     if (isStatusLocked && newStatus !== 'delivered') {
       const confirmUnlock = window.confirm(
-        isRtl 
+        t.statusLockedNotice || (isRtl 
           ? "⚠️ یہ آرڈر مکمل (Delivered) ہو چکا ہے اور لاک ہے۔ کیا آپ واقعی اسے دوبارہ ان لاک کر کے اسٹیٹس تبدیل کرنا چاہتے ہیں؟"
-          : "⚠️ This order is Delivered and Locked. Do you want to unlock and change status?"
+          : "⚠️ This order is Delivered and Locked. Do you want to unlock and change status?")
       );
       if (!confirmUnlock) return;
       setIsStatusLocked(false);
@@ -80,7 +89,7 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
     if (slip.deliveryDate) {
       msg += `🚀 *تاریخ واپسی / ڈیلیوری (Delivery Date):* ${slip.deliveryDate}\n`;
     }
-    msg += `📦 *آرڈر اسٹیٹس (Status):* ${statusMeta.icon} ${statusMeta.labelUrdu}\n`;
+    msg += `📦 *آرڈر اسٹیٹس (Status):* ${statusMeta.icon} ${getStatusLabel(currentStatus)}\n`;
     msg += `━━━━━━━━━━━━━━━━━━━━\n`;
     msg += `✂️ *ناپ کی تفصیل (Measurements):*\n\n`;
 
@@ -131,7 +140,7 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
       billText = `\n\nBILL & PAYMENT:\nTotal: Rs. ${slip.totalAmount}\nAdvance: Rs. ${slip.advanceAmount || 0}\nBalance Due: Rs. ${slip.balanceAmount || 0}`;
     }
     const deliveryText = slip.deliveryDate ? `\nDelivery Date: ${slip.deliveryDate}` : '';
-    const textToCopy = `AZAD MASTER - CUTTING SLIP\nCustomer: ${slip.name}\nPhone: ${slip.phone}\nBooking Date: ${slip.date}${deliveryText}\nStatus: ${statusMeta.labelUrdu} (${statusMeta.labelEn})\n\n${slip.details}${billText}`;
+    const textToCopy = `AZAD MASTER - CUTTING SLIP\nCustomer: ${slip.name}\nPhone: ${slip.phone}\nBooking Date: ${slip.date}${deliveryText}\nStatus: ${getStatusLabel(currentStatus)}\n\n${slip.details}${billText}`;
     navigator.clipboard.writeText(textToCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -194,29 +203,29 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
               </span>
               <span className="flex items-center gap-1.5 text-white">
                 <Calendar className="w-3.5 h-3.5 text-[#25d366]" />
-                <span>{isRtl ? 'بکنگ:' : 'Booked:'} {slip.date}</span>
+                <span>{t.dateLabel || (isRtl ? 'بکنگ:' : 'Booked:')}: {slip.date}</span>
               </span>
             </div>
             {slip.deliveryDate && (
               <div className="flex justify-between items-center pt-1 border-t border-[#128c7e]/30 text-[11px]">
                 <span className="text-[#dcf8c6] flex items-center gap-1">
                   <span>🚀</span>
-                  <span>{isRtl ? 'تاریخ ڈیلیوری:' : 'Delivery Date:'}</span>
+                  <span>{t.deliveryDateLabel || (isRtl ? 'تاریخ ڈیلیوری:' : 'Delivery Date:')}:</span>
                   <span className="font-bold text-white">{slip.deliveryDate}</span>
                 </span>
                 {getDeliveryStatus(slip.deliveryDate, currentStatus) === 'late' && (
                   <span className="bg-rose-500 text-white font-black px-2 py-0.2 rounded-full text-[10px] animate-pulse">
-                    ⚠️ {isRtl ? 'تاخیر شدہ' : 'Late Order'}
+                    ⚠️ {t.lateOrder || (isRtl ? 'تاخیر شدہ' : 'Late Order')}
                   </span>
                 )}
                 {getDeliveryStatus(slip.deliveryDate, currentStatus) === 'today' && (
                   <span className="bg-[#25d366] text-white font-black px-2 py-0.2 rounded-full text-[10px] animate-pulse">
-                    ⚡ {isRtl ? 'آج کی ڈیلیوری' : 'Due Today'}
+                    ⚡ {t.dueToday || (isRtl ? 'آج کی ڈیلیوری' : 'Due Today')}
                   </span>
                 )}
                 {getDeliveryStatus(slip.deliveryDate, currentStatus) === 'upcoming' && (
                   <span className="bg-[#128c7e] text-white font-medium px-2 py-0.2 rounded-full text-[10px]">
-                    📅 {isRtl ? 'آئندہ' : 'Upcoming'}
+                    📅 {t.upcomingOrder || (isRtl ? 'آئندہ' : 'Upcoming')}
                   </span>
                 )}
               </div>
@@ -231,23 +240,23 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
             <div className="flex items-center justify-between mb-2.5">
               <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-[#075e54]" />
-                <span>{isRtl ? 'آرڈر کی حالت (Order Status)' : 'Order Tracking Status'}</span>
+                <span>{t.orderStatusHeading || (isRtl ? 'آرڈر کی حالت (Order Status)' : 'Order Tracking Status')}</span>
               </span>
               <div className="flex items-center gap-1.5">
                 {currentStatus === 'delivered' ? (
                   <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#dcf8c6] text-[#075e54] border border-[#00a884]/40 flex items-center gap-1">
                     <span>🔒</span>
-                    <span>{isRtl ? 'پکا / لاک شدہ' : 'Locked'}</span>
+                    <span>{t.statusLocked || (isRtl ? 'پکا / لاک شدہ' : 'Locked')}</span>
                   </span>
                 ) : (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-1">
                     <span>🔓</span>
-                    <span>{isRtl ? 'تبدیل ہو سکتا ہے' : 'Unlocked'}</span>
+                    <span>{t.statusUnlocked || (isRtl ? 'تبدیل ہو سکتا ہے' : 'Unlocked')}</span>
                   </span>
                 )}
                 <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1 ${statusMeta.badgeClass}`}>
                   <span>{statusMeta.icon}</span>
-                  <span>{isRtl ? statusMeta.labelUrdu : statusMeta.labelEn}</span>
+                  <span>{getStatusLabel(currentStatus)}</span>
                 </span>
               </div>
             </div>
@@ -268,11 +277,11 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
                         ? `${meta.badgeClass} ring-2 ring-[#075e54] shadow-xs scale-102`
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                     }`}
-                    title={meta.labelUrdu}
+                    title={getStatusLabel(st)}
                   >
                     <span className="text-xs">{meta.icon}</span>
                     <span className="truncate w-full text-center leading-tight">
-                      {isRtl ? meta.shortUrdu : meta.labelEn}
+                      {getStatusLabel(st)}
                     </span>
                   </button>
                 );
@@ -286,7 +295,7 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
               <div className="flex items-center justify-between pb-1.5 border-b border-[#128c7e]/20">
                 <span className="text-xs font-bold uppercase tracking-wider text-[#075e54] flex items-center gap-1.5">
                   <Wallet className="w-3.5 h-3.5 text-[#075e54]" />
-                  {isRtl ? 'سلائی کھاتہ و بل (Tailoring Bill & Payment)' : 'Tailoring Bill & Payment'}
+                  {t.tailoringBillHeading || (isRtl ? 'سلائی کھاتہ و بل' : 'Tailoring Bill & Payment')}
                 </span>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                   Number(slip.balanceAmount || 0) === 0
@@ -294,15 +303,15 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
                     : 'bg-amber-100 text-amber-900 border-amber-300'
                 }`}>
                   {Number(slip.balanceAmount || 0) === 0
-                    ? (isRtl ? '✓ مکمل ادا شدہ' : '✓ Fully Paid')
-                    : (isRtl ? '⏳ بقایا واجب الادا' : '⏳ Balance Due')}
+                    ? (t.fullyPaid || (isRtl ? '✓ مکمل ادا شدہ' : '✓ Fully Paid'))
+                    : (t.balanceDueLabel || (isRtl ? '⏳ بقایا واجب الادا' : '⏳ Balance Due'))}
                 </span>
               </div>
 
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="bg-white p-2 rounded-lg border border-[#128c7e]/15 shadow-2xs">
                   <span className="block text-[10px] font-semibold text-slate-500 mb-0.5">
-                    {isRtl ? 'کل سلائی اجرت' : 'Total Amount'}
+                    {t.totalAmountLabel || (isRtl ? 'کل سلائی اجرت' : 'Total Amount')}
                   </span>
                   <span className="text-xs sm:text-sm font-black text-slate-800">
                     Rs. {slip.totalAmount}
@@ -311,7 +320,7 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
 
                 <div className="bg-white p-2 rounded-lg border border-[#128c7e]/15 shadow-2xs">
                   <span className="block text-[10px] font-semibold text-slate-500 mb-0.5">
-                    {isRtl ? 'پیشگی ایڈوانس' : 'Advance Paid'}
+                    {t.advanceAmountLabel || (isRtl ? 'پیشگی ایڈوانس' : 'Advance Paid')}
                   </span>
                   <span className="text-xs sm:text-sm font-black text-[#075e54]">
                     Rs. {slip.advanceAmount || 0}
@@ -324,7 +333,7 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
                     : 'bg-amber-50 border-amber-300 text-amber-900'
                 }`}>
                   <span className="block text-[10px] font-semibold mb-0.5">
-                    {isRtl ? 'بقایا رقم' : 'Balance Due'}
+                    {t.balanceAmountLabel || (isRtl ? 'بقایا رقم' : 'Balance Due')}
                   </span>
                   <span className="text-xs sm:text-sm font-black">
                     Rs. {slip.balanceAmount !== undefined && slip.balanceAmount !== '' ? slip.balanceAmount : Math.max(0, (parseFloat(String(slip.totalAmount || 0)) - parseFloat(String(slip.advanceAmount || 0))))}
@@ -339,7 +348,7 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
             <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-100">
               <span className="text-xs font-bold uppercase tracking-wider text-[#075e54] flex items-center gap-1.5">
                 <Scissors className="w-3.5 h-3.5" />
-                Cutting Dimensions (انچ ناپ)
+                {t.cuttingDimensionsHeading || 'Cutting Dimensions'}
               </span>
               <button 
                 id="copy-slip-btn"
@@ -370,7 +379,7 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
             <div className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-xs text-center">
               <span className="text-xs font-semibold text-slate-600 mb-2 flex items-center justify-center gap-1">
                 <ImageIcon className="w-3.5 h-3.5 text-[#075e54]" />
-                Paper Slip / Cloth Snapshot
+                {t.paperSlipSnapshot || 'Paper Slip / Cloth Snapshot'}
               </span>
               <div 
                 className="relative cursor-pointer group inline-block max-w-full"
@@ -381,7 +390,7 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
                   alt="Paper Slip" 
                   className="max-h-36 max-w-full object-contain rounded-lg border border-slate-200 mx-auto shadow-xs group-hover:opacity-90 transition-opacity"
                 />
-                <span className="text-[10px] text-slate-500 mt-1 block">Tap to zoom</span>
+                <span className="text-[10px] text-slate-500 mt-1 block">{t.tapToZoom || 'Tap to zoom'}</span>
               </div>
             </div>
           )}
@@ -403,7 +412,7 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
           {showDeleteConfirm ? (
             <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-2 animate-in fade-in">
               <p className="text-xs font-bold text-red-800 text-center">
-                {isRtl ? 'کیا آپ واقعی اس گاہک کا ریکارڈ ڈیلیٹ کرنا چاہتے ہیں؟' : 'Are you sure you want to delete this customer record?'}
+                {t.confirmDeleteCustomer || (isRtl ? 'کیا آپ واقعی اس گاہک کا ریکارڈ ڈیلیٹ کرنا چاہتے ہیں؟' : 'Are you sure you want to delete this customer record?')}
               </p>
               <div className="flex gap-2">
                 <button
@@ -414,13 +423,13 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
                   }}
                   className="flex-1 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
                 >
-                  {isRtl ? 'ہاں، ڈیلیٹ کریں' : 'Yes, Delete'}
+                  {t.yesDelete || (isRtl ? 'ہاں، ڈیلیٹ کریں' : 'Yes, Delete')}
                 </button>
                 <button
                   onClick={() => setShowDeleteConfirm(false)}
                   className="flex-1 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition-colors cursor-pointer"
                 >
-                  {isRtl ? 'منسوخ' : 'Cancel'}
+                  {t.cancel || (isRtl ? 'منسوخ' : 'Cancel')}
                 </button>
               </div>
             </div>

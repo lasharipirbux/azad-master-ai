@@ -203,6 +203,24 @@ const menuTranslations: Record<SupportedLanguage, {
     helpSupport: "Help & User Guide",
     logout: "Logout",
     close: "Close"
+  },
+  pt: {
+    menuTitle: "Menu Azad Master",
+    profileSettings: "Perfil e Configurações",
+    changeLanguage: "Mudar Idioma",
+    dataBackup: "Backup e Sincronização",
+    helpSupport: "Ajuda e Guia do Usuário",
+    logout: "Sair",
+    close: "Fechar"
+  },
+  th: {
+    menuTitle: "เมนู Azad Master",
+    profileSettings: "โปรไฟล์และการตั้งค่า",
+    changeLanguage: "เปลี่ยนภาษา",
+    dataBackup: "สำรองและซิงค์ข้อมูล",
+    helpSupport: "ความช่วยเหลือและคู่มือ",
+    logout: "ออกจากระบบ",
+    close: "ปิด"
   }
 };
 

@@ -1,4 +1,5 @@
 import React from 'react';
+import { TranslationDictionary } from '../data/translations';
 
 export interface SlimSummaryHeaderProps {
   todayCount?: number;
@@ -8,6 +9,7 @@ export interface SlimSummaryHeaderProps {
   isTodayActive?: boolean;
   isLateActive?: boolean;
   isRtl?: boolean;
+  translations?: TranslationDictionary;
 }
 
 /**
@@ -25,9 +27,13 @@ export const SlimSummaryHeader: React.FC<SlimSummaryHeaderProps> = ({
   isTodayActive = false,
   isLateActive = false,
   isRtl = true,
+  translations,
 }) => {
+  const todayLabel = translations?.todayDelivery || (isRtl ? 'آج کی ڈیلیوری:' : "Today's Delivery:");
+  const lateLabel = translations?.lateOrders || (isRtl ? 'لیٹ آرڈرز:' : 'Late Orders:');
+
   return (
-    <div 
+    <div
       id="slim-summary-header"
       style={{
         display: 'flex',
@@ -72,9 +78,9 @@ export const SlimSummaryHeader: React.FC<SlimSummaryHeaderProps> = ({
           outline: 'none',
         }}
         className="transition-all active:scale-[0.98] shadow-2xs"
-        title={isRtl ? 'آج کی ڈیلیوری کے آرڈرز دیکھیں' : "Today's Delivery"}
+        title={todayLabel}
       >
-        <span 
+        <span
           style={{
             fontSize: 12,
             fontWeight: 600,
@@ -84,9 +90,9 @@ export const SlimSummaryHeader: React.FC<SlimSummaryHeaderProps> = ({
             whiteSpace: 'nowrap',
           }}
         >
-          {isRtl ? 'آج کی ڈیلیوری:' : "Today's Delivery:"}
+          {todayLabel}
         </span>
-        <span 
+        <span
           style={{
             fontSize: 13,
             fontWeight: 'bold',
@@ -137,9 +143,9 @@ export const SlimSummaryHeader: React.FC<SlimSummaryHeaderProps> = ({
           outline: 'none',
         }}
         className="transition-all active:scale-[0.98] shadow-2xs"
-        title={isRtl ? 'تاخیر شدہ آرڈرز دیکھیں' : 'Late Orders'}
+        title={lateLabel}
       >
-        <span 
+        <span
           style={{
             fontSize: 12,
             fontWeight: 600,
@@ -149,9 +155,9 @@ export const SlimSummaryHeader: React.FC<SlimSummaryHeaderProps> = ({
             whiteSpace: 'nowrap',
           }}
         >
-          {isRtl ? 'لیٹ آرڈرز:' : 'Late Orders:'}
+          {lateLabel}
         </span>
-        <span 
+        <span
           style={{
             fontSize: 13,
             fontWeight: 'bold',
