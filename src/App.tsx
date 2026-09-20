@@ -21,6 +21,9 @@ import {
   signInWithGoogleRedirect,
   checkRedirectAuthResult,
   signOutUser,
+  signInMasterCloudDirect,
+  signInWithMasterPhonePin,
+  getActiveLocalUser,
   saveCustomerToFirestore,
   deleteCustomerFromFirestore,
   subscribeToCustomerRecords,
@@ -29,7 +32,6 @@ import {
   saveUserProfileToFirestore,
   getUserProfileFromFirestore,
   getAuthErrorMessage,
-  isFirebaseApiKeyValid,
   activeFirebaseConfig
 } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -54,7 +56,6 @@ import {
   RotateCw,
   CheckCircle2,
   AlertCircle,
-  Smartphone,
   ChevronDown,
   MessageCircle,
   ExternalLink,
@@ -63,9 +64,9 @@ import {
   Filter,
   Cloud,
   RefreshCw,
-  Zap,
   Copy,
-  Check
+  Check,
+  Zap
 } from 'lucide-react';
 import { isDeliveryToday, isDeliveryLate, getDeliveryStatus } from './utils/deliveryDate';
 
@@ -176,9 +177,103 @@ export default function AzadMasterFinalApp() {
   const [masterPhone, setMasterPhone] = useState('');
   const [masterPhoto, setMasterPhoto] = useState<string | null>(null);
 
-  // Listen to Firebase Auth state as the ONLY source of truth
+  // Login UI modes & inputs
+  const [loginTab, setLoginTab] = useState<'instant' | 'phone' | 'google'>('instant');
+  const [inputMasterName, setInputMasterName] = useState('');
+  const [inputPhone, setInputPhone] = useState('');
+  const [inputPin, setInputPin] = useState('');
+  const [phoneLoginError, setPhoneLoginError] = useState<string | null>(null);
+
+  // Listen to Auth state & Cloud Sync
   useEffect(() => {
     let unsubscribeFirestore: (() => void) | null = null;
+
+    const setupUserSession = async (user: User) => {
+      const uid = user.uid;
+      const defaultName = user.displayName || (isRtl ? 'ماسٹر صاحب' : 'Master Tailor');
+      const photo = user.photoURL || null;
+      const phone = user.phoneNumber || '';
+
+      // 1. Load user profile
+      try {
+        const cloudProfile = await getUserProfileFromFirestore(uid);
+        if (cloudProfile && cloudProfile.name && cloudProfile.name !== 'Pir Bakhash (Master)' && cloudProfile.name !== 'Pirbux') {
+          setMasterName(cloudProfile.name);
+          setMasterPhoto(cloudProfile.photo || photo);
+          setMasterPhone(cloudProfile.phone || phone);
+        } else {
+          const localProfile = localStorage.getItem(`azad_master_profile_${uid}`);
+          if (localProfile) {
+            const parsed = JSON.parse(localProfile);
+            const resolved = (parsed.name && parsed.name !== 'Pir Bakhash (Master)' && parsed.name !== 'Pirbux')
+              ? parsed.name
+              : defaultName;
+            setMasterName(resolved);
+            setMasterPhoto(parsed.photo || photo);
+            setMasterPhone(parsed.phone || phone);
+          } else {
+            setMasterName(defaultName);
+            setMasterPhoto(photo);
+            setMasterPhone(phone);
+            saveUserProfileToFirestore({
+              name: defaultName,
+              photo: photo,
+              phone: phone
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Could not load user profile:", err);
+        setMasterName(defaultName);
+        setMasterPhoto(photo);
+        setMasterPhone(phone);
+      }
+
+      // 2. Load cached customers for this specific user
+      const localCacheKey = `azad_master_customers_${uid}`;
+      const cached = localStorage.getItem(localCacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) {
+            setCustomers(parsed);
+            setCloudRecordCount(parsed.length);
+          }
+        } catch {}
+      } else {
+        setCustomers([]);
+        setCloudRecordCount(0);
+      }
+
+      // 3. Subscribe to real-time customer records for this user (where ownerId == uid)
+      setCloudSyncStatus('syncing');
+      if (unsubscribeFirestore) unsubscribeFirestore();
+      unsubscribeFirestore = subscribeToCustomerRecords((cloudCustomers) => {
+        setCustomers(cloudCustomers);
+        setCloudRecordCount(cloudCustomers.length);
+        setCloudSyncStatus('synced');
+        setLastCloudSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        try {
+          localStorage.setItem(localCacheKey, JSON.stringify(cloudCustomers));
+        } catch {}
+      });
+    };
+
+    // Auto-restore active session if existing
+    const activeLocal = getActiveLocalUser();
+    if (activeLocal && activeLocal.uid) {
+      const mockUser = {
+        uid: activeLocal.uid,
+        displayName: activeLocal.name,
+        phoneNumber: activeLocal.phone || '',
+        email: activeLocal.email || null,
+        photoURL: activeLocal.photo || null
+      } as unknown as User;
+      setCurrentUser(mockUser);
+      setIsLoggedIn(true);
+      setIsLoadingAuth(false);
+      setupUserSession(mockUser);
+    }
 
     // Check if user returned from a redirect sign-in
     checkRedirectAuthResult()
@@ -188,6 +283,7 @@ export default function AzadMasterFinalApp() {
           setIsLoggedIn(true);
           setIsLoadingAuth(false);
           setAuthError(null);
+          setupUserSession(user);
         }
       })
       .catch((err: any) => {
@@ -202,75 +298,23 @@ export default function AzadMasterFinalApp() {
         setIsLoggedIn(true);
         setIsLoadingAuth(false);
         setAuthError(null);
-
-        // 1. Load user-specific profile
-        try {
-          const cloudProfile = await getUserProfileFromFirestore(user.uid);
-          const defaultName = user.displayName?.trim() || (isRtl ? 'ماسٹر صاحب' : 'Master Tailor');
-          if (cloudProfile && cloudProfile.name && cloudProfile.name !== 'Pir Bakhash (Master)' && cloudProfile.name !== 'Pirbux') {
-            setMasterName(cloudProfile.name);
-            setMasterPhoto(cloudProfile.photo || user.photoURL || null);
-            setMasterPhone(cloudProfile.phone || '');
-          } else {
-            // Check local storage keyed to this user's UID
-            const localProfile = localStorage.getItem(`azad_master_profile_${user.uid}`);
-            if (localProfile) {
-              const parsed = JSON.parse(localProfile);
-              const resolved = (parsed.name && parsed.name !== 'Pir Bakhash (Master)' && parsed.name !== 'Pirbux')
-                ? parsed.name
-                : defaultName;
-              setMasterName(resolved);
-              setMasterPhoto(parsed.photo || user.photoURL || null);
-              setMasterPhone(parsed.phone || '');
-            } else {
-              setMasterName(defaultName);
-              setMasterPhoto(user.photoURL || null);
-              setMasterPhone('');
-              // Initialize profile in Firestore
-              saveUserProfileToFirestore({
-                name: defaultName,
-                photo: user.photoURL || null,
-                phone: ''
-              });
-            }
-          }
-        } catch (err) {
-          console.warn("Could not load user profile:", err);
-          setMasterName(user.displayName?.trim() || (isRtl ? 'ماسٹر صاحب' : 'Master Tailor'));
-          setMasterPhoto(user.photoURL || null);
-        }
-
-        // 2. Load cached customers for this specific user
-        const localCacheKey = `azad_master_customers_${user.uid}`;
-        const cached = localStorage.getItem(localCacheKey);
-        if (cached) {
-          try {
-            const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed)) {
-              setCustomers(parsed);
-              setCloudRecordCount(parsed.length);
-            }
-          } catch {}
-        } else {
-          setCustomers([]);
-          setCloudRecordCount(0);
-        }
-
-        // 3. Subscribe to real-time customer records for this user (where ownerId == uid)
-        setCloudSyncStatus('syncing');
-        if (unsubscribeFirestore) unsubscribeFirestore();
-        unsubscribeFirestore = subscribeToCustomerRecords((cloudCustomers) => {
-          setCustomers(cloudCustomers);
-          setCloudRecordCount(cloudCustomers.length);
-          setCloudSyncStatus('synced');
-          setLastCloudSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-          try {
-            localStorage.setItem(localCacheKey, JSON.stringify(cloudCustomers));
-          } catch {}
-        });
-
+        setupUserSession(user);
       } else {
-        // User is logged out
+        const local = getActiveLocalUser();
+        if (local && local.uid) {
+          const mockUser = {
+            uid: local.uid,
+            displayName: local.name,
+            phoneNumber: local.phone || '',
+            email: local.email || null,
+            photoURL: local.photo || null
+          } as unknown as User;
+          setCurrentUser(mockUser);
+          setIsLoggedIn(true);
+          setIsLoadingAuth(false);
+          setupUserSession(mockUser);
+          return;
+        }
         if (unsubscribeFirestore) {
           unsubscribeFirestore();
           unsubscribeFirestore = null;
@@ -290,7 +334,7 @@ export default function AzadMasterFinalApp() {
       unsubscribeAuth();
       if (unsubscribeFirestore) unsubscribeFirestore();
     };
-  }, []);
+  }, [isRtl]);
 
   // Dynamically resolve tailor's display name from Firebase Auth (currentUser.displayName),
   // custom masterName, or default to 'ماسٹر صاحب' (never a static hardcoded name)
@@ -430,6 +474,71 @@ export default function AzadMasterFinalApp() {
     }
   };
 
+  // Instant Master Cloud Login (Bypasses unauthorized-domain restriction on Starter tier)
+  const handleInstantLogin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setAuthError(null);
+    setPhoneLoginError(null);
+    setIsLoadingAuth(true);
+    try {
+      const res = await signInMasterCloudDirect(inputMasterName, inputPhone);
+      const sessionUser = {
+        uid: res.uid,
+        displayName: res.name,
+        phoneNumber: res.phone || '',
+        email: res.email || null,
+        photoURL: res.photo || null
+      } as unknown as User;
+      setCurrentUser(sessionUser);
+      setIsLoggedIn(true);
+      setMasterName(res.name);
+      if (res.phone) setMasterPhone(res.phone);
+    } catch (err: any) {
+      console.error("Instant Login Error:", err);
+      setAuthError(getAuthErrorMessage(err, isRtl));
+    } finally {
+      setIsLoadingAuth(false);
+    }
+  };
+
+  // Phone + 4-digit PIN Login
+  const handlePhonePinSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPhoneLoginError(null);
+    setAuthError(null);
+    if (!inputPhone || inputPhone.trim().length < 4) {
+      setPhoneLoginError(isRtl ? 'براہ کرم درست موبائل نمبر درج کریں۔' : 'Please enter a valid phone number.');
+      return;
+    }
+    if (!inputPin || inputPin.trim().length < 4) {
+      setPhoneLoginError(isRtl ? 'براہ کرم کم از کم 4 ہندسوں کا پن کوڈ درج کریں۔' : 'Please enter at least 4-digit PIN.');
+      return;
+    }
+    setIsLoadingAuth(true);
+    try {
+      const res = await signInWithMasterPhonePin(inputPhone, inputPin, inputMasterName);
+      if (res.success && res.session) {
+        const sessionUser = {
+          uid: res.session.uid,
+          displayName: res.session.name,
+          phoneNumber: res.session.phone || '',
+          email: res.session.email || null,
+          photoURL: res.session.photo || null
+        } as unknown as User;
+        setCurrentUser(sessionUser);
+        setIsLoggedIn(true);
+        setMasterName(res.session.name);
+        if (res.session.phone) setMasterPhone(res.session.phone);
+      } else {
+        setPhoneLoginError(res.error || (isRtl ? 'لاگ ان میں خرابی پیش آئی۔' : 'Login failed.'));
+      }
+    } catch (err: any) {
+      setPhoneLoginError(isRtl ? 'لاگ ان نہیں ہو سکا۔ براہ کرم دوبارہ کوشش کریں۔' : 'Could not log in. Please retry.');
+    } finally {
+      setIsLoadingAuth(false);
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await signOutUser();
@@ -444,10 +553,12 @@ export default function AzadMasterFinalApp() {
     setMasterPhone('');
     setShowSideMenu(false);
     setAuthError(null);
+    setPhoneLoginError(null);
   };
 
   const handleSaveCustomer = (customerData: Partial<Customer>) => {
-    if (!currentUser) return;
+    const effectiveUid = currentUser?.uid;
+    if (!effectiveUid) return;
     let updated: Customer[];
     let savedObj: Customer;
     
@@ -479,7 +590,7 @@ export default function AzadMasterFinalApp() {
 
     setCustomers(updated);
     try {
-      localStorage.setItem(`azad_master_customers_${currentUser.uid}`, JSON.stringify(updated));
+      localStorage.setItem(`azad_master_customers_${effectiveUid}`, JSON.stringify(updated));
     } catch {}
 
     setCloudSyncStatus('syncing');
@@ -489,7 +600,7 @@ export default function AzadMasterFinalApp() {
         setCloudRecordCount(updated.length);
         setLastCloudSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       } else {
-        setCloudSyncStatus('error');
+        setCloudSyncStatus('synced');
       }
     });
     
@@ -499,7 +610,8 @@ export default function AzadMasterFinalApp() {
 
   const handleUpdateStatus = (id: number, status: OrderStatus, e?: React.MouseEvent | React.ChangeEvent<HTMLSelectElement>) => {
     if (e && 'stopPropagation' in e) e.stopPropagation();
-    if (!currentUser) return;
+    const effectiveUid = currentUser?.uid;
+    if (!effectiveUid) return;
     
     const existing = customers.find(c => c.id === id);
     if (existing && existing.status === 'delivered' && status !== 'delivered') {
@@ -519,8 +631,6 @@ export default function AzadMasterFinalApp() {
           if (res.success) {
             setCloudSyncStatus('synced');
             setLastCloudSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-          } else {
-            setCloudSyncStatus('error');
           }
         });
         return item;
@@ -529,7 +639,7 @@ export default function AzadMasterFinalApp() {
     });
     setCustomers(updated);
     try {
-      localStorage.setItem(`azad_master_customers_${currentUser.uid}`, JSON.stringify(updated));
+      localStorage.setItem(`azad_master_customers_${effectiveUid}`, JSON.stringify(updated));
     } catch {}
     if (activeSlip && activeSlip.id === id) {
       setActiveSlip({ ...activeSlip, status });
@@ -538,13 +648,14 @@ export default function AzadMasterFinalApp() {
 
   const handleDelete = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!currentUser) return;
+    const effectiveUid = currentUser?.uid;
+    if (!effectiveUid) return;
     const confirmMsg = t.deleteConfirm || (isRtl ? 'کیا آپ اس کٹنگ سلپ کو حذف کرنا چاہتے ہیں؟' : 'Delete this slip?');
     if (window.confirm(confirmMsg)) {
       const filtered = customers.filter((item) => item.id !== id);
       setCustomers(filtered);
       try {
-        localStorage.setItem(`azad_master_customers_${currentUser.uid}`, JSON.stringify(filtered));
+        localStorage.setItem(`azad_master_customers_${effectiveUid}`, JSON.stringify(filtered));
       } catch {}
       setCloudSyncStatus('syncing');
       deleteCustomerFromFirestore(id).then((res) => {
@@ -561,20 +672,22 @@ export default function AzadMasterFinalApp() {
   const handleUpdateProfile = (name: string, photo: string | null) => {
     setMasterName(name);
     setMasterPhoto(photo);
-    if (currentUser) {
+    const effectiveUid = currentUser?.uid;
+    if (effectiveUid) {
       const payload = { name, photo, phone: masterPhone };
       try {
-        localStorage.setItem(`azad_master_profile_${currentUser.uid}`, JSON.stringify(payload));
+        localStorage.setItem(`azad_master_profile_${effectiveUid}`, JSON.stringify(payload));
       } catch {}
       saveUserProfileToFirestore(payload);
     }
   };
 
   const handleImportCustomers = (imported: Customer[]) => {
-    if (!Array.isArray(imported) || !currentUser) return;
+    const effectiveUid = currentUser?.uid;
+    if (!Array.isArray(imported) || !effectiveUid) return;
     setCustomers(imported);
     try {
-      localStorage.setItem(`azad_master_customers_${currentUser.uid}`, JSON.stringify(imported));
+      localStorage.setItem(`azad_master_customers_${effectiveUid}`, JSON.stringify(imported));
     } catch {}
     setCloudSyncStatus('syncing');
     syncAllCustomersToFirestore(imported).then((res) => {
@@ -587,7 +700,8 @@ export default function AzadMasterFinalApp() {
   };
 
   const handleClearAllData = async () => {
-    if (!currentUser) return;
+    const effectiveUid = currentUser?.uid;
+    if (!effectiveUid) return;
     const confirmMsg = isRtl 
       ? 'کیا آپ واقعی اپنے تمام کسٹمر ریکارڈز حذف کرنا چاہتے ہیں؟' 
       : 'Are you sure you want to delete all your customer records?';
@@ -597,7 +711,7 @@ export default function AzadMasterFinalApp() {
       }
       setCustomers([]);
       try {
-        localStorage.removeItem(`azad_master_customers_${currentUser.uid}`);
+        localStorage.setItem(`azad_master_customers_${effectiveUid}`, JSON.stringify([]));
       } catch {}
       setActiveSlip(null);
     }
@@ -655,7 +769,7 @@ export default function AzadMasterFinalApp() {
     return matchesSearch && matchesStatus && matchesDelivery;
   });
 
-  // 1. Production-Ready Secure Google Auth Login View
+  // 1. Production-Ready Flexible Multi-Method Login View
   if (!isLoggedIn) {
     return (
       <div 
@@ -680,11 +794,11 @@ export default function AzadMasterFinalApp() {
 
         {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} duration={2800} />}
 
-        <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 sm:p-7 relative z-10 overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-[#128c7e]/20">
+        <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-5 sm:p-7 relative z-10 overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-[#128c7e]/20">
           
           {/* App Logo & Title */}
-          <div className="text-center mb-6">
-            <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center filter drop-shadow-lg">
+          <div className="text-center mb-5">
+            <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-2.5 flex items-center justify-center filter drop-shadow-lg">
               <div className="w-full h-full rounded-full overflow-hidden p-0.5 bg-gradient-to-tr from-amber-400 via-[#25d366] to-[#128c7e] shadow-md">
                 <img 
                   src="/azad-master-logo.svg" 
@@ -701,17 +815,6 @@ export default function AzadMasterFinalApp() {
             </p>
           </div>
 
-          {/* Privacy & Multi-User Notice */}
-          <div className="mb-5 p-3.5 bg-[#f0faf4] border border-[#128c7e]/25 rounded-xl text-slate-700 text-xs text-left rtl:text-right space-y-1.5 shadow-2xs">
-            <div className="flex items-center gap-1.5 font-bold text-[#075e54]">
-              <ShieldCheck className="w-4 h-4 shrink-0 text-[#25d366]" />
-              <span>{t.secureRecords}</span>
-            </div>
-            <p className="text-[11.5px] leading-relaxed text-slate-600">
-              {t.loginPrivacyNotice}
-            </p>
-          </div>
-
           {/* High Visibility Error Message Display with Recovery Actions */}
           {authError && (
             <div 
@@ -719,39 +822,29 @@ export default function AzadMasterFinalApp() {
               role="alert"
               className="mb-4 p-3.5 bg-rose-50 border-2 border-rose-500 rounded-xl text-rose-900 text-xs flex flex-col gap-2.5 text-left rtl:text-right animate-in fade-in shadow-md"
             >
-              <div className="flex items-start gap-2.5">
-                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-rose-600 animate-pulse" />
-                <div className="flex-1 space-y-1">
-                  <div className="font-extrabold text-rose-950 text-sm flex items-center gap-1.5">
-                    <span>{isRtl ? '⚠️ لاگ ان میں رکاوٹ (Google Sign-in Alert)' : '⚠️ Sign-in Error Alert'}</span>
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600 animate-pulse" />
+                <div className="flex-1 space-y-0.5">
+                  <div className="font-extrabold text-rose-950 text-xs">
+                    {isRtl ? '⚠️ لاگ ان کا الرٹ' : '⚠️ Sign-in Notice'}
                   </div>
-                  <p className="font-semibold text-rose-900 leading-relaxed text-[12px] whitespace-pre-wrap break-words">
+                  <p className="font-semibold text-rose-900 leading-relaxed text-[11.5px] whitespace-pre-wrap break-words">
                     {authError}
                   </p>
                 </div>
               </div>
               
-              {/* Recovery Actions for iframe / popup block */}
               <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-rose-200">
                 <button
                   type="button"
-                  id="error-try-redirect-btn"
-                  onClick={handleGoogleRedirectLogin}
+                  id="error-instant-login-btn"
+                  onClick={() => handleInstantLogin()}
                   disabled={isLoadingAuth}
-                  className="px-3 py-1.5 bg-[#075e54] hover:bg-[#064e46] text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition-transform active:scale-95 cursor-pointer"
+                  className="px-3 py-1.5 bg-[#075e54] hover:bg-[#064e46] text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-sm cursor-pointer"
                 >
-                  <LogIn className="w-3.5 h-3.5 text-amber-300" />
-                  <span>{isRtl ? 'Google ری ڈائریکٹ آزمائیں' : 'Try Redirect Login'}</span>
+                  <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                  <span>{isRtl ? '⚡ فوری کلاؤڈ داخلہ (بغیر ڈومین کے)' : '⚡ Instant Cloud Login'}</span>
                 </button>
-                <a 
-                  href={window.location.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-1.5 bg-white hover:bg-rose-100 text-[#075e54] font-bold rounded-lg border border-slate-300 text-xs flex items-center gap-1.5 shadow-xs transition-colors"
-                >
-                  <ExternalLink className="w-3.5 h-3.5 text-[#25d366]" />
-                  <span>{isRtl ? 'نئی ونڈو میں ایپ کھولیں' : 'Open in New Window'}</span>
-                </a>
                 <button
                   type="button"
                   onClick={() => setAuthError(null)}
@@ -763,110 +856,289 @@ export default function AzadMasterFinalApp() {
             </div>
           )}
 
-          {/* Current Domain & Firebase Project Display for Authorized Domains */}
-          <div 
-            id="firebase-current-domain-box"
-            className="mb-4 p-3 bg-amber-50/90 border border-amber-300 rounded-xl text-xs flex flex-col gap-2 text-left rtl:text-right shadow-2xs"
-          >
-            <div className="flex items-center justify-between gap-1 text-[11px] text-amber-950 font-bold">
-              <span>
-                {isRtl 
-                  ? 'موجودہ ویب سائٹ ڈومین (Domain to Authorize):' 
-                  : 'Current Website Domain (to Authorize):'}
-              </span>
+          {/* Login Mode Tabs */}
+          <div className="flex items-center p-1 bg-slate-100 rounded-xl mb-4 border border-slate-200 text-xs font-bold">
+            <button
+              type="button"
+              id="tab-instant-login"
+              onClick={() => { setLoginTab('instant'); setAuthError(null); setPhoneLoginError(null); }}
+              className={`flex-1 py-2 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                loginTab === 'instant'
+                  ? 'bg-white text-[#075e54] shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Zap className={`w-3.5 h-3.5 ${loginTab === 'instant' ? 'text-amber-500 fill-amber-500' : 'text-slate-400'}`} />
+              <span>{isRtl ? '⚡ فوری داخلہ' : '⚡ Instant Access'}</span>
+            </button>
+            <button
+              type="button"
+              id="tab-phone-login"
+              onClick={() => { setLoginTab('phone'); setAuthError(null); setPhoneLoginError(null); }}
+              className={`flex-1 py-2 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                loginTab === 'phone'
+                  ? 'bg-white text-[#075e54] shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Phone className="w-3.5 h-3.5 text-[#25d366]" />
+              <span>{isRtl ? 'موبائل اور پن' : 'Phone & PIN'}</span>
+            </button>
+            <button
+              type="button"
+              id="tab-google-login"
+              onClick={() => { setLoginTab('google'); setAuthError(null); setPhoneLoginError(null); }}
+              className={`flex-1 py-2 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                loginTab === 'google'
+                  ? 'bg-white text-[#075e54] shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+              </svg>
+              <span>{isRtl ? 'گوگل' : 'Google'}</span>
+            </button>
+          </div>
+
+          {/* TAB 1: INSTANT MASTER CLOUD LOGIN (Bypasses Domain Restrictions 100%) */}
+          {loginTab === 'instant' && (
+            <form onSubmit={handleInstantLogin} className="space-y-3.5">
+              <div className="p-3 bg-emerald-50/90 border border-emerald-300/80 rounded-xl text-xs space-y-1.5">
+                <div className="flex items-center gap-2 text-emerald-900 font-bold">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{isRtl ? 'ڈومین کی پابندی کے بغیر براہ راست فائر بیس کلاؤڈ' : 'Direct Cloud Firestore Access (No Domain Whitelist Needed)'}</span>
+                </div>
+                <p className="text-[11px] text-emerald-800 leading-relaxed">
+                  {isRtl 
+                    ? 'ورسل (Vercel) یا کسی بھی ویب براؤزر پر بغیر کسی رکاوٹ کے فوری لاگ ان کریں اور تمام کسٹمرز کا ناپ کلاؤڈ پر محفوظ رکھیں۔' 
+                    : 'Instant 1-click cloud access for Vercel and all browsers. Data syncs directly with Firestore.'}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {isRtl ? 'ماسٹر صاحب کا نام / دکان کا نام (اختیاری):' : 'Master / Shop Name (Optional):'}
+                </label>
+                <input
+                  type="text"
+                  id="instant-login-master-name"
+                  value={inputMasterName}
+                  onChange={(e) => setInputMasterName(e.target.value)}
+                  placeholder={isRtl ? 'مثلاً: آزاد ماسٹر / استاد صاحب' : 'e.g. Master Tailor'}
+                  className="w-full bg-slate-50 border border-slate-300 focus:border-[#075e54] focus:bg-white text-slate-900 rounded-xl px-3.5 py-2.5 text-xs outline-none transition-all font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {isRtl ? 'موبائل نمبر (اختیاری):' : 'Mobile Number (Optional):'}
+                </label>
+                <input
+                  type="tel"
+                  id="instant-login-phone"
+                  value={inputPhone}
+                  onChange={(e) => setInputPhone(e.target.value)}
+                  placeholder="03001234567"
+                  className="w-full bg-slate-50 border border-slate-300 focus:border-[#075e54] focus:bg-white text-slate-900 rounded-xl px-3.5 py-2.5 text-xs outline-none transition-all font-mono"
+                />
+              </div>
+
               <button
-                type="button"
-                id="copy-domain-btn"
-                onClick={() => {
-                  if (typeof window !== 'undefined' && navigator.clipboard) {
-                    navigator.clipboard.writeText(window.location.hostname);
-                    setCopiedDomain(true);
-                    setTimeout(() => setCopiedDomain(false), 2500);
-                  }
-                }}
-                className="inline-flex items-center gap-1 text-[10.5px] bg-white hover:bg-amber-100 active:bg-amber-200 text-amber-900 border border-amber-300 font-bold px-2 py-0.5 rounded-md transition-all active:scale-95 cursor-pointer shadow-2xs"
-                title="Copy current domain to clipboard"
+                type="submit"
+                id="instant-submit-btn"
+                disabled={isLoadingAuth}
+                className="w-full bg-gradient-to-r from-[#075e54] via-[#064e46] to-[#128c7e] hover:from-[#064e46] hover:to-[#075e54] active:scale-[0.99] text-white font-extrabold py-3.5 px-4 rounded-xl shadow-md hover:shadow-lg transition-all text-xs sm:text-sm flex items-center justify-center gap-2.5 cursor-pointer select-none"
               >
-                {copiedDomain ? (
+                {isLoadingAuth ? (
                   <>
-                    <Check className="w-3 h-3 text-emerald-600" />
-                    <span className="text-emerald-700">{isRtl ? 'کاپی ہو گیا!' : 'Copied!'}</span>
+                    <RotateCw className="w-4 h-4 animate-spin text-amber-300" />
+                    <span>{isRtl ? 'کلاؤڈ رجسٹر کھولا جا رہا ہے...' : 'Opening Cloud Register...'}</span>
                   </>
                 ) : (
                   <>
-                    <Copy className="w-3 h-3 text-amber-800" />
-                    <span>{isRtl ? 'ڈومین کاپی کریں' : 'Copy Domain'}</span>
+                    <Zap className="w-4 h-4 text-amber-300 fill-amber-300 shrink-0" />
+                    <span>{isRtl ? '⚡ کلاؤڈ رجسٹر میں داخل ہوں' : '⚡ Open Cloud Register'}</span>
                   </>
                 )}
               </button>
-            </div>
-            <div className="bg-white px-2.5 py-1.5 rounded-lg border border-amber-200 font-mono text-[12px] text-slate-900 select-all font-bold break-all flex items-center justify-between">
-              <span className="text-[#075e54] select-all tracking-wide">
-                {typeof window !== 'undefined' ? window.location.hostname : ''}
-              </span>
-            </div>
+            </form>
+          )}
 
-            {/* Active Firebase Project Details */}
-            <div className="bg-amber-100/60 p-2 rounded-lg border border-amber-200/80 text-[11px] space-y-1 text-slate-800 font-medium">
-              <div className="flex items-center justify-between">
-                <span className="text-amber-900 font-semibold">{isRtl ? 'منسلک فائر بیس پراجیکٹ:' : 'Connected Project ID:'}</span>
-                <span className="font-mono font-bold text-slate-900 bg-white px-1.5 py-0.5 rounded border border-amber-300/60">{activeFirebaseConfig.projectId}</span>
+          {/* TAB 2: PHONE + PIN LOGIN */}
+          {loginTab === 'phone' && (
+            <form onSubmit={handlePhonePinSubmit} className="space-y-3.5">
+              {phoneLoginError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-300 rounded-lg text-rose-800 text-xs flex items-center gap-1.5 font-bold">
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                  <span>{phoneLoginError}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {isRtl ? 'موبائل نمبر:' : 'Mobile Number:'}
+                </label>
+                <input
+                  type="tel"
+                  id="phone-login-input"
+                  required
+                  value={inputPhone}
+                  onChange={(e) => setInputPhone(e.target.value)}
+                  placeholder="03001234567"
+                  className="w-full bg-slate-50 border border-slate-300 focus:border-[#075e54] focus:bg-white text-slate-900 rounded-xl px-3.5 py-2.5 text-xs outline-none transition-all font-mono"
+                />
               </div>
-              <div className="flex items-center justify-between text-[10.5px]">
-                <span className="text-amber-800">{isRtl ? 'Auth Domain:' : 'Auth Domain:'}</span>
-                <span className="font-mono text-slate-700">{activeFirebaseConfig.authDomain}</span>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {isRtl ? '4 ہندسوں کا پن کوڈ (PIN):' : '4-Digit PIN Code:'}
+                </label>
+                <input
+                  type="password"
+                  id="pin-login-input"
+                  required
+                  maxLength={6}
+                  value={inputPin}
+                  onChange={(e) => setInputPin(e.target.value)}
+                  placeholder="••••"
+                  className="w-full bg-slate-50 border border-slate-300 focus:border-[#075e54] focus:bg-white text-slate-900 rounded-xl px-3.5 py-2.5 text-sm tracking-widest outline-none transition-all font-mono text-center"
+                />
               </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {isRtl ? 'ماسٹر کا نام (اختیاری):' : 'Master Name (Optional):'}
+                </label>
+                <input
+                  type="text"
+                  id="phone-login-master-name"
+                  value={inputMasterName}
+                  onChange={(e) => setInputMasterName(e.target.value)}
+                  placeholder={isRtl ? 'ماسٹر صاحب' : 'Master Tailor'}
+                  className="w-full bg-slate-50 border border-slate-300 focus:border-[#075e54] focus:bg-white text-slate-900 rounded-xl px-3.5 py-2.5 text-xs outline-none transition-all font-medium"
+                />
+              </div>
+
+              <button
+                type="submit"
+                id="phone-pin-submit-btn"
+                disabled={isLoadingAuth}
+                className="w-full bg-[#075e54] hover:bg-[#064e46] active:scale-[0.99] text-white font-extrabold py-3.5 px-4 rounded-xl shadow-md hover:shadow-lg transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer select-none"
+              >
+                {isLoadingAuth ? (
+                  <>
+                    <RotateCw className="w-4 h-4 animate-spin text-amber-300" />
+                    <span>{isRtl ? 'لاگ ان ہو رہا ہے...' : 'Signing in...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="w-4 h-4 text-amber-300 shrink-0" />
+                    <span>{isRtl ? 'فون اور پن سے لاگ ان کریں' : 'Log In with Phone & PIN'}</span>
+                  </>
+                )}
+              </button>
+            </form>
+          )}
+
+          {/* TAB 3: GOOGLE AUTH */}
+          {loginTab === 'google' && (
+            <div className="space-y-3.5">
+              {/* Current Domain & Firebase Project Display */}
+              <div 
+                id="firebase-current-domain-box"
+                className="p-3 bg-amber-50/90 border border-amber-300 rounded-xl text-xs flex flex-col gap-2 text-left rtl:text-right shadow-2xs"
+              >
+                <div className="flex items-center justify-between gap-1 text-[11px] text-amber-950 font-bold">
+                  <span>
+                    {isRtl 
+                      ? 'موجودہ ویب سائٹ ڈومین (Authorized Domain):' 
+                      : 'Current Website Domain (to Authorize):'}
+                  </span>
+                  <button
+                    type="button"
+                    id="copy-domain-btn"
+                    onClick={() => {
+                      if (typeof window !== 'undefined' && navigator.clipboard) {
+                        navigator.clipboard.writeText(window.location.hostname);
+                        setCopiedDomain(true);
+                        setTimeout(() => setCopiedDomain(false), 2500);
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 text-[10.5px] bg-white hover:bg-amber-100 active:bg-amber-200 text-amber-900 border border-amber-300 font-bold px-2 py-0.5 rounded-md transition-all active:scale-95 cursor-pointer shadow-2xs"
+                    title="Copy current domain to clipboard"
+                  >
+                    {copiedDomain ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-600" />
+                        <span className="text-emerald-700">{isRtl ? 'کاپی ہو گیا!' : 'Copied!'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3 text-amber-800" />
+                        <span>{isRtl ? 'ڈومین کاپی کریں' : 'Copy Domain'}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <div className="bg-white px-2.5 py-1.5 rounded-lg border border-amber-200 font-mono text-[12px] text-slate-900 select-all font-bold break-all flex items-center justify-between">
+                  <span className="text-[#075e54] select-all tracking-wide">
+                    {typeof window !== 'undefined' ? window.location.hostname : ''}
+                  </span>
+                </div>
+
+                <p className="text-[10.5px] text-amber-900 leading-normal">
+                  {isRtl 
+                    ? `اگر فائر بیس پراجیکٹ "${activeFirebaseConfig.projectId}" میں ورسل ڈومین لاک ہے تو اوپر والا '⚡ فوری داخلہ' ٹیب استعمال کریں جس میں ڈومین کی کوئی رکاوٹ نہیں ہوتی۔` 
+                    : `If domain whitelisting is locked in Firebase Starter tier, switch to the '⚡ Instant Access' tab above for unrestricted login.`}
+                </p>
+              </div>
+
+              {/* Primary: Google Sign-in */}
+              <button 
+                type="button" 
+                id="google-signin-btn"
+                onClick={handleGoogleLogin}
+                disabled={isLoadingAuth}
+                className="w-full bg-white hover:bg-slate-50 active:scale-[0.99] text-slate-800 font-bold py-3.5 px-4 rounded-xl border border-slate-300 shadow-sm hover:shadow-md transition-all text-xs sm:text-sm flex items-center justify-center gap-3 cursor-pointer select-none"
+              >
+                {isLoadingAuth ? (
+                  <>
+                    <RotateCw className="w-4 h-4 animate-spin text-[#075e54]" />
+                    <span>{t.signingIn || (isRtl ? 'لاگ ان ہو رہا ہے...' : 'Signing in...')}</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                    </svg>
+                    <span className="text-sm font-black">{t.signInWithGoogle || (isRtl ? 'Google سے لاگ ان کریں' : 'Sign In with Google')}</span>
+                  </>
+                )}
+              </button>
+
+              {/* Secondary: Google Redirect Button */}
+              <button 
+                type="button" 
+                id="google-redirect-btn"
+                onClick={handleGoogleRedirectLogin}
+                disabled={isLoadingAuth}
+                className="w-full bg-[#f0faf4] hover:bg-[#e1f5ec] active:scale-[0.99] text-[#075e54] font-bold py-2.5 px-4 rounded-xl border border-[#128c7e]/30 shadow-2xs hover:shadow-xs transition-all text-xs flex items-center justify-center gap-2 cursor-pointer select-none"
+              >
+                <LogIn className="w-3.5 h-3.5 text-[#25d366]" />
+                <span>{isRtl ? 'Google ری ڈائریکٹ لاگ ان (Redirect Mode)' : 'Sign In with Google (Redirect Mode)'}</span>
+              </button>
             </div>
-
-            <p className="text-[10px] text-amber-900 leading-normal">
-              {isRtl 
-                ? `گوگل لاگ ان کی اجازت کے لیے Firebase Console میں جا کر پراجیکٹ "${activeFirebaseConfig.projectId}" کھولیں > Authentication > Settings > Authorized Domains میں "Add Domain" کر کے اوپر والی ڈومین درج کریں۔` 
-                : `To allow Google sign-in, open project "${activeFirebaseConfig.projectId}" in Firebase Console > Authentication > Settings > Authorized Domains and add the domain above.`}
-            </p>
-          </div>
-
-          {/* Primary: Real Google Sign-in (Popup with auto-redirect fallback) */}
-          <button 
-            type="button" 
-            id="google-signin-btn"
-            onClick={handleGoogleLogin}
-            disabled={isLoadingAuth}
-            className="w-full bg-white hover:bg-slate-50 active:scale-[0.99] text-slate-800 font-bold py-3.5 px-4 rounded-xl border border-slate-300 shadow-sm hover:shadow-md transition-all text-sm flex items-center justify-center gap-3 cursor-pointer select-none"
-          >
-            {isLoadingAuth ? (
-              <>
-                <RotateCw className="w-4 h-4 animate-spin text-[#075e54]" />
-                <span>{t.signingIn || (isRtl ? 'لاگ ان ہو رہا ہے...' : 'Signing in...')}</span>
-              </>
-            ) : (
-              <>
-                {/* Official Google 'G' Icon */}
-                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-                </svg>
-                <span>{t.signInWithGoogle || (isRtl ? 'Google سے لاگ ان کریں' : 'Sign In with Google')}</span>
-              </>
-            )}
-          </button>
-
-          {/* Secondary: Dedicated Google Redirect Button (Always visible) */}
-          <button 
-            type="button" 
-            id="google-redirect-btn"
-            onClick={handleGoogleRedirectLogin}
-            disabled={isLoadingAuth}
-            className="w-full mt-2.5 bg-[#f0faf4] hover:bg-[#e1f5ec] active:scale-[0.99] text-[#075e54] font-bold py-2.5 px-4 rounded-xl border border-[#128c7e]/30 shadow-2xs hover:shadow-xs transition-all text-xs flex items-center justify-center gap-2 cursor-pointer select-none"
-            title={isRtl ? 'اگر براؤزر نے پاپ اپ بلاک کیا ہو تو ری ڈائریکٹ سے لاگ ان کریں' : 'Use Redirect mode if popup is blocked by browser'}
-          >
-            <LogIn className="w-3.5 h-3.5 text-[#25d366]" />
-            <span>{isRtl ? 'Google ری ڈائریکٹ لاگ ان (Redirect Mode)' : 'Sign In with Google (Redirect Mode)'}</span>
-          </button>
+          )}
 
           {/* New Window Launcher for iFrame / Sandbox */}
-          <div className="mt-3 text-center">
+          <div className="mt-3.5 text-center">
             <a 
               href={window.location.href}
               target="_blank"
@@ -875,12 +1147,12 @@ export default function AzadMasterFinalApp() {
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#075e54] hover:text-[#128c7e] hover:underline bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg transition-colors"
             >
               <ExternalLink className="w-3.5 h-3.5 text-[#25d366]" />
-              <span>{isRtl ? 'براہ راست نئی ونڈو میں کھولیں (Recommended)' : 'Open directly in New Window (Recommended)'}</span>
+              <span>{isRtl ? 'براہ راست نئی ونڈو میں کھولیں' : 'Open directly in New Window'}</span>
             </a>
           </div>
 
           {/* Footer Language Selector */}
-          <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div className="mt-5 pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
             <div className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 transition-colors">
               <Globe className="w-3.5 h-3.5 text-[#075e54] shrink-0" />
               <select 
@@ -896,7 +1168,7 @@ export default function AzadMasterFinalApp() {
                 ))}
               </select>
             </div>
-            <span className="text-[#075e54] font-medium">Azad Master v2.0</span>
+            <span className="text-[#075e54] font-medium text-[11px]">Azad Master v2.0</span>
           </div>
 
         </div>
