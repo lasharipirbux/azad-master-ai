@@ -694,19 +694,6 @@ export default function AzadMasterFinalApp() {
             </p>
           </div>
 
-          {/* Unconfigured API Key Notice */}
-          {!isFirebaseApiKeyValid() && !authError && (
-            <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs text-left rtl:text-right flex items-start gap-2 shadow-2xs">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
-              <div className="leading-relaxed">
-                <span className="font-bold">{isRtl ? 'فائر بیس API کی درکار ہے:' : 'Firebase API Key Required:'}</span>{' '}
-                {isRtl 
-                  ? 'پروجیکٹ azad-master کی اصل Web App API Key درکار ہے۔ فائر بیس کنسول سے API کی حاصل کر کے firebase-applet-config.json میں شامل کریں۔' 
-                  : 'Project azad-master requires a real Web App API key from Firebase Console.'}
-              </div>
-            </div>
-          )}
-
           {/* Error Message Display with Recovery Actions */}
           {authError && (
             <div className="mb-4 p-3 bg-rose-50 border border-rose-300 rounded-xl text-rose-800 text-xs flex flex-col gap-2.5 text-left rtl:text-right animate-in fade-in">
