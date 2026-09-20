@@ -29,7 +29,8 @@ import {
   saveUserProfileToFirestore,
   getUserProfileFromFirestore,
   getAuthErrorMessage,
-  isFirebaseApiKeyValid
+  isFirebaseApiKeyValid,
+  activeFirebaseConfig
 } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { 
@@ -762,16 +763,16 @@ export default function AzadMasterFinalApp() {
             </div>
           )}
 
-          {/* Current Domain Display for Firebase Authorized Domains */}
+          {/* Current Domain & Firebase Project Display for Authorized Domains */}
           <div 
             id="firebase-current-domain-box"
-            className="mb-4 p-2.5 bg-amber-50/80 border border-amber-300/70 rounded-xl text-xs flex flex-col gap-1.5 text-left rtl:text-right shadow-2xs"
+            className="mb-4 p-3 bg-amber-50/90 border border-amber-300 rounded-xl text-xs flex flex-col gap-2 text-left rtl:text-right shadow-2xs"
           >
-            <div className="flex items-center justify-between gap-1 text-[11px] text-amber-900 font-semibold">
+            <div className="flex items-center justify-between gap-1 text-[11px] text-amber-950 font-bold">
               <span>
                 {isRtl 
-                  ? 'موجودہ ڈومین (Firebase Authorized Domains):' 
-                  : 'Current Domain (Firebase Authorized Domains):'}
+                  ? 'موجودہ ویب سائٹ ڈومین (Domain to Authorize):' 
+                  : 'Current Website Domain (to Authorize):'}
               </span>
               <button
                 type="button"
@@ -804,10 +805,23 @@ export default function AzadMasterFinalApp() {
                 {typeof window !== 'undefined' ? window.location.hostname : ''}
               </span>
             </div>
-            <p className="text-[10px] text-amber-800/85 leading-tight">
+
+            {/* Active Firebase Project Details */}
+            <div className="bg-amber-100/60 p-2 rounded-lg border border-amber-200/80 text-[11px] space-y-1 text-slate-800 font-medium">
+              <div className="flex items-center justify-between">
+                <span className="text-amber-900 font-semibold">{isRtl ? 'منسلک فائر بیس پراجیکٹ:' : 'Connected Project ID:'}</span>
+                <span className="font-mono font-bold text-slate-900 bg-white px-1.5 py-0.5 rounded border border-amber-300/60">{activeFirebaseConfig.projectId}</span>
+              </div>
+              <div className="flex items-center justify-between text-[10.5px]">
+                <span className="text-amber-800">{isRtl ? 'Auth Domain:' : 'Auth Domain:'}</span>
+                <span className="font-mono text-slate-700">{activeFirebaseConfig.authDomain}</span>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-amber-900 leading-normal">
               {isRtl 
-                ? 'Firebase Console > Authentication > Settings > Authorized Domains میں Add Domain پر کلک کر کے یہ ڈومین پیسٹ کریں۔' 
-                : 'Copy and paste this domain into Firebase Console > Authentication > Settings > Authorized Domains.'}
+                ? `گوگل لاگ ان کی اجازت کے لیے Firebase Console میں جا کر پراجیکٹ "${activeFirebaseConfig.projectId}" کھولیں > Authentication > Settings > Authorized Domains میں "Add Domain" کر کے اوپر والی ڈومین درج کریں۔` 
+                : `To allow Google sign-in, open project "${activeFirebaseConfig.projectId}" in Firebase Console > Authentication > Settings > Authorized Domains and add the domain above.`}
             </p>
           </div>
 

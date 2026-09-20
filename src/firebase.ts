@@ -108,15 +108,23 @@ export interface FirebaseAppConfig {
 
 /**
  * Real Firebase production configuration object loaded directly from active project credentials
+ * Supports runtime environment variables for Vercel, Docker, and custom deployments.
  */
 export const activeFirebaseConfig: FirebaseAppConfig = {
-  apiKey: (firebaseConfig && (firebaseConfig as any).apiKey) ? (firebaseConfig as any).apiKey : 'AIzaSyAjQ7cTB4kH77svICmQGCdhbhSz5IXUpCY',
-  authDomain: (firebaseConfig && (firebaseConfig as any).authDomain) ? (firebaseConfig as any).authDomain : 'empyrean-rigging-4lcf1.firebaseapp.com',
-  projectId: (firebaseConfig && (firebaseConfig as any).projectId) ? (firebaseConfig as any).projectId : 'empyrean-rigging-4lcf1',
-  storageBucket: (firebaseConfig && (firebaseConfig as any).storageBucket) ? (firebaseConfig as any).storageBucket : 'empyrean-rigging-4lcf1.firebasestorage.app',
-  messagingSenderId: (firebaseConfig && (firebaseConfig as any).messagingSenderId) ? (firebaseConfig as any).messagingSenderId : '233024949239',
-  appId: (firebaseConfig && (firebaseConfig as any).appId) ? (firebaseConfig as any).appId : '1:233024949239:web:977cadbde0f974b5ae3cf2',
-  firestoreDatabaseId: (firebaseConfig && (firebaseConfig as any).firestoreDatabaseId) ? (firebaseConfig as any).firestoreDatabaseId : 'ai-studio-azadmastertailor-5ebcf705-17cc-4a0d-a990-93d623364a7a',
+  apiKey: getRuntimeEnv(['VITE_FIREBASE_API_KEY', 'FIREBASE_API_KEY', 'REACT_APP_FIREBASE_API_KEY'])
+    || ((firebaseConfig && (firebaseConfig as any).apiKey) ? (firebaseConfig as any).apiKey : 'AIzaSyAjQ7cTB4kH77svICmQGCdhbhSz5IXUpCY'),
+  authDomain: getRuntimeEnv(['VITE_FIREBASE_AUTH_DOMAIN', 'FIREBASE_AUTH_DOMAIN', 'REACT_APP_FIREBASE_AUTH_DOMAIN'])
+    || ((firebaseConfig && (firebaseConfig as any).authDomain) ? (firebaseConfig as any).authDomain : 'empyrean-rigging-4lcf1.firebaseapp.com'),
+  projectId: getRuntimeEnv(['VITE_FIREBASE_PROJECT_ID', 'FIREBASE_PROJECT_ID', 'REACT_APP_FIREBASE_PROJECT_ID'])
+    || ((firebaseConfig && (firebaseConfig as any).projectId) ? (firebaseConfig as any).projectId : 'empyrean-rigging-4lcf1'),
+  storageBucket: getRuntimeEnv(['VITE_FIREBASE_STORAGE_BUCKET', 'FIREBASE_STORAGE_BUCKET', 'REACT_APP_FIREBASE_STORAGE_BUCKET'])
+    || ((firebaseConfig && (firebaseConfig as any).storageBucket) ? (firebaseConfig as any).storageBucket : 'empyrean-rigging-4lcf1.firebasestorage.app'),
+  messagingSenderId: getRuntimeEnv(['VITE_FIREBASE_MESSAGING_SENDER_ID', 'FIREBASE_MESSAGING_SENDER_ID'])
+    || ((firebaseConfig && (firebaseConfig as any).messagingSenderId) ? (firebaseConfig as any).messagingSenderId : '233024949239'),
+  appId: getRuntimeEnv(['VITE_FIREBASE_APP_ID', 'FIREBASE_APP_ID'])
+    || ((firebaseConfig && (firebaseConfig as any).appId) ? (firebaseConfig as any).appId : '1:233024949239:web:977cadbde0f974b5ae3cf2'),
+  firestoreDatabaseId: getRuntimeEnv(['VITE_FIRESTORE_DATABASE_ID', 'FIRESTORE_DATABASE_ID'])
+    || ((firebaseConfig && (firebaseConfig as any).firestoreDatabaseId) ? (firebaseConfig as any).firestoreDatabaseId : 'ai-studio-azadmastertailor-5ebcf705-17cc-4a0d-a990-93d623364a7a'),
 };
 
 /**
@@ -176,9 +184,10 @@ export function getAuthErrorMessage(error: any, isRtl: boolean = true): string {
   let detail = '';
 
   if (code === 'auth/unauthorized-domain') {
+    const projId = activeFirebaseConfig.projectId;
     detail = isRtl 
-      ? `ڈومین "${currentHostname}" فائر بیس کنسول کے مجاز ڈومینز (Authorized Domains) میں درج نہیں ہے۔ براہ کرم Firebase Console > Authentication > Settings > Authorized Domains میں جائیں اور "${currentHostname}" شامل کریں۔` 
-      : `Domain "${currentHostname}" is not authorized. Please add "${currentHostname}" in Firebase Console > Authentication > Settings > Authorized Domains.`;
+      ? `ڈومین "${currentHostname}" فائر بیس کنسول میں پروجیکٹ (${projId}) کے مجاز ڈومینز (Authorized Domains) میں درج نہیں ہے۔\n\nحل کے مراحل:\n1. https://console.firebase.google.com پر جا کر پروجیکٹ "${projId}" کھولیں۔\n2. Build > Authentication پر کلک کریں اور اوپر "Settings" ٹیب پر جائیں۔\n3. "Authorized Domains" سیکشن میں "Add domain" پر کلک کر کے "${currentHostname}" درج کریں اور محفوظ (Save) کر لیں۔` 
+      : `Domain "${currentHostname}" is not authorized in Firebase project "${projId}".\n\nResolution Steps:\n1. Go to https://console.firebase.google.com and open project "${projId}".\n2. Go to Build > Authentication > Settings tab > Authorized Domains.\n3. Click "Add domain", enter "${currentHostname}" (without https://) and Save.`;
   } else if (code === 'auth/operation-not-allowed') {
     detail = isRtl
       ? 'فائر بیس کنسول میں Google Sign-in فعال (Enabled) نہیں ہے۔ براہ کرم Firebase Console > Authentication > Sign-in method میں جا کر Google کو Enable کریں۔'
