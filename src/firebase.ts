@@ -48,16 +48,17 @@ declare global {
 }
 
 /**
- * Hardcoded production defaults for Azad Master Project (empyrean-rigging-41cf1)
- * Used as 100% resilient fallback for GitHub/Vercel deployments when environment variables are omitted or invalid.
+ * Azad Master Official Firebase Production Configuration
+ * Project: azazd-master-pro
+ * Hardcoded directly to guarantee seamless Vercel / GitHub builds with zero environment variable dependency.
  */
 export const PROD_FIREBASE_CREDENTIALS = {
-  apiKey: "AIzaSyAjQ7cTB4kH77svICmQGCdhbhSz5IXUpCY",
-  authDomain: "empyrean-rigging-41cf1.firebaseapp.com",
-  projectId: "empyrean-rigging-41cf1",
-  storageBucket: "empyrean-rigging-41cf1.firebasestorage.app",
-  messagingSenderId: "233024949239",
-  appId: "1:233024949239:web:977cadbde0f974b5ae3cf2",
+  apiKey: "AIzaSyD74z-08tLErdWyXwEGH08lhwGj-Lq6AWg",
+  authDomain: "azazd-master-pro.firebaseapp.com",
+  projectId: "azazd-master-pro",
+  storageBucket: "azazd-master-pro.firebasestorage.app",
+  messagingSenderId: "1024488085383",
+  appId: "1:1024488085383:web:aae9b0d7e4330d47b56522",
   firestoreDatabaseId: "ai-studio-azadmastertailor-5ebcf705-17cc-4a0d-a990-93d623364a7a",
   oAuthClientId: "233024949239-q8uoq10lbaljbm3fob8396k8us09sl6n.apps.googleusercontent.com"
 } as const;
@@ -153,26 +154,17 @@ function resolveFirebaseConfig(): FirebaseAppConfig {
   // 2. Resolve Auth Domain
   const envAuthDomain = getRuntimeEnv(['VITE_FIREBASE_AUTH_DOMAIN', 'REACT_APP_FIREBASE_AUTH_DOMAIN', 'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN']);
   const jsonAuthDomain = (firebaseConfig as any)?.authDomain;
-  let validAuthDomain: string = sanitizeValue(envAuthDomain) || sanitizeValue(jsonAuthDomain) || PROD_FIREBASE_CREDENTIALS.authDomain;
-  if (validAuthDomain.includes('empyrean-rigging-4lcf1')) {
-    validAuthDomain = validAuthDomain.replace('empyrean-rigging-4lcf1', 'empyrean-rigging-41cf1');
-  }
+  const validAuthDomain: string = sanitizeValue(envAuthDomain) || sanitizeValue(jsonAuthDomain) || PROD_FIREBASE_CREDENTIALS.authDomain;
 
   // 3. Resolve Project ID
   const envProjectId = getRuntimeEnv(['VITE_FIREBASE_PROJECT_ID', 'REACT_APP_FIREBASE_PROJECT_ID', 'NEXT_PUBLIC_FIREBASE_PROJECT_ID']);
   const jsonProjectId = (firebaseConfig as any)?.projectId;
-  let validProjectId: string = sanitizeValue(envProjectId) || sanitizeValue(jsonProjectId) || PROD_FIREBASE_CREDENTIALS.projectId;
-  if (validProjectId === 'empyrean-rigging-4lcf1') {
-    validProjectId = 'empyrean-rigging-41cf1';
-  }
+  const validProjectId: string = sanitizeValue(envProjectId) || sanitizeValue(jsonProjectId) || PROD_FIREBASE_CREDENTIALS.projectId;
 
   // 4. Resolve Storage Bucket
   const envStorage = getRuntimeEnv(['VITE_FIREBASE_STORAGE_BUCKET', 'REACT_APP_FIREBASE_STORAGE_BUCKET']);
   const jsonStorage = (firebaseConfig as any)?.storageBucket;
-  let validStorage: string = sanitizeValue(envStorage) || sanitizeValue(jsonStorage) || PROD_FIREBASE_CREDENTIALS.storageBucket;
-  if (validStorage.includes('empyrean-rigging-4lcf1')) {
-    validStorage = validStorage.replace('empyrean-rigging-4lcf1', 'empyrean-rigging-41cf1');
-  }
+  const validStorage: string = sanitizeValue(envStorage) || sanitizeValue(jsonStorage) || PROD_FIREBASE_CREDENTIALS.storageBucket;
 
   // 5. Resolve Messaging Sender ID
   const envSenderId = getRuntimeEnv(['VITE_FIREBASE_MESSAGING_SENDER_ID', 'REACT_APP_FIREBASE_MESSAGING_SENDER_ID']);
@@ -327,23 +319,27 @@ export function getAuthErrorMessage(error: any, isRtl: boolean = true): string {
 
   let detail = '';
 
-  if (code === 'auth/unauthorized-domain') {
+  if (code === 'auth/configuration-not-found') {
+    detail = isRtl 
+      ? `فائر بیس کنسول میں آتھنٹیکیشن (Authentication > Google) شروع نہیں کی گئی ہے۔ براہ کرم Firebase Console میں جا کر "Get Started" یا "Google Sign-In" آن کریں، یا ایپ کو فوری چلانے کے لیے نیچے دیئے گئے "⚡ ماسٹر فوری لاگ ان" بٹن پر کلک کریں۔` 
+      : `Firebase Authentication is not initialized in your Firebase Console (Build > Authentication). Please click "Get Started" and enable Google in console, or click "⚡ Instant Master Login" below to continue.`;
+  } else if (code === 'auth/unauthorized-domain') {
     const projId = activeFirebaseConfig.projectId;
     detail = isRtl 
       ? `ڈومین "${currentHostname}" گوگل اتھورائزڈ لسٹ میں شامل نہیں ہے۔ ورسل (Vercel) پر فوری استعمال کے لیے نیچے دیئے گئے "⚡ ماسٹر فوری لاگ ان" بٹن پر کلک کریں۔` 
       : `Domain "${currentHostname}" is not in Google Authorized list. Click "⚡ Instant Master Login" below to bypass domain restriction.`;
   } else if (code === 'auth/operation-not-allowed') {
     detail = isRtl
-      ? 'فائر بیس کنسول میں سائن اِن میتھڈ فعال نہیں ہے۔ براہ کرم "⚡ ماسٹر فوری لاگ ان" استعمال کریں۔'
-      : 'Sign-in method is not enabled. Please use "Instant Master Login".';
+      ? 'فائر بیس کنسول میں Google سائن اِن میتھڈ فعال نہیں ہے۔ براہ کرم Firebase Console میں Google آن کریں یا "⚡ ماسٹر فوری لاگ ان" استعمال کریں۔'
+      : 'Google Sign-in is not enabled in Firebase Console. Please enable it or use "Instant Master Login".';
   } else if (code === 'auth/popup-blocked' || code === 'auth/cancelled-popup-request') {
     detail = isRtl 
       ? 'براؤزر نے لاگ ان پاپ اپ ونڈو کو بلاک کر دیا ہے۔ براہ کرم براؤزر میں پاپ اپ کی اجازت دیں یا "⚡ ماسٹر فوری لاگ ان" کا بٹن استعمال کریں۔'
       : 'Sign-in popup was blocked by the browser. Please allow popups or use Instant Master Login.';
   } else if (code === 'auth/network-request-failed') {
     detail = isRtl 
-      ? 'انٹرنیٹ کنکشن میں تعطل پیش آیا۔ براہ کرم دوبارہ کوشش کریں۔'
-      : 'Network connection failed. Please check your internet connection.';
+      ? 'انٹرنیٹ یا براؤزر سیکیورٹی کی وجہ سے گوگل رابطہ مکمل نہ ہو سکا۔ "⚡ ماسٹر فوری لاگ ان" کا بٹن دبائیں۔'
+      : 'Network request failed or cookies were blocked. Use "Instant Master Login" to continue.';
   } else if (code === 'auth/popup-closed-by-user') {
     detail = isRtl 
       ? 'لاگ ان ونڈو عمل مکمل ہونے سے پہلے بند کر دی گئی۔' 
@@ -554,7 +550,7 @@ export async function signInWithGoogle(): Promise<User> {
 
     return result.user;
   } catch (error: any) {
-    console.error(`[Firebase Auth Popup Error] Code: "${error?.code}", Message: "${error?.message}"`, error);
+    console.warn(`[Firebase Auth Popup Notice] Code: "${error?.code}", Message: "${error?.message}"`);
     throw error;
   }
 }
@@ -572,7 +568,7 @@ export async function signInWithGoogleRedirect(): Promise<void> {
   try {
     await signInWithRedirect(auth, provider);
   } catch (error: any) {
-    console.error(`[Firebase Auth Redirect Error] Code: "${error?.code}", Message: "${error?.message}"`, error);
+    console.warn(`[Firebase Auth Redirect Notice] Code: "${error?.code}", Message: "${error?.message}"`);
     throw error;
   }
 }
