@@ -5,6 +5,12 @@ export type SupportedLanguage =
   | 'pa' | 'sd' | 'ps' | 'ms' | 'id'
   | 'pt' | 'th';
 
+export interface CustomField {
+  id: string;
+  name: string;
+  value: string;
+}
+
 export interface CustomerMeasurements {
   length: string;
   shoulder: string;
@@ -17,6 +23,14 @@ export interface CustomerMeasurements {
   pancha: string;
   pocket: string;
   specialNotes: string;
+  hips?: string;
+  thigh?: string;
+  knee?: string;
+  inseam?: string;
+  crossBack?: string;
+  armhole?: string;
+  bicep?: string;
+  customFields?: CustomField[];
 }
 
 export type OrderStatus = 'pending' | 'cutting' | 'stitching' | 'ready' | 'delivered';

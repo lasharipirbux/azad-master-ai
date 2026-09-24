@@ -106,6 +106,13 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
       if (m.shalwar) msg += `▫️ شلوار (Shalwar): *${m.shalwar}"*\n`;
       if (m.pancha) msg += `▫️ پانچہ (Paancha): *${m.pancha}"*\n`;
       if (m.pocket) msg += `▫️ جیب/پکٹ (Pocket): ${m.pocket}\n`;
+      if (m.customFields && Array.isArray(m.customFields)) {
+        for (const cf of m.customFields) {
+          if (cf.name && cf.value) {
+            msg += `▫️ ${cf.name}: *${cf.value}"*\n`;
+          }
+        }
+      }
       if (m.specialNotes) msg += `▫️ خصوصی نوٹ: ${m.specialNotes}\n`;
     } else {
       msg += `${slip.details}\n`;

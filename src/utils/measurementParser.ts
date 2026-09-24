@@ -39,6 +39,19 @@ export function normalizeNumerals(str: string): string {
   return res;
 }
 
+export type StandardMeasurementKey = 
+  | 'length' 
+  | 'shoulder' 
+  | 'sleeves' 
+  | 'chest' 
+  | 'waist' 
+  | 'daaman' 
+  | 'collar' 
+  | 'shalwar' 
+  | 'pancha' 
+  | 'pocket' 
+  | 'specialNotes';
+
 export function parseMeasurementsFromText(input: string): Partial<CustomerMeasurements> | null {
   if (!input || typeof input !== 'string') return null;
 
@@ -46,7 +59,7 @@ export function parseMeasurementsFromText(input: string): Partial<CustomerMeasur
   const found: Partial<CustomerMeasurements> = {};
 
   // Patterns for each field
-  const patterns: { key: keyof CustomerMeasurements; regex: RegExp[] }[] = [
+  const patterns: { key: StandardMeasurementKey; regex: RegExp[] }[] = [
     {
       key: 'length',
       regex: [

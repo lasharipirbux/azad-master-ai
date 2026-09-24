@@ -12,6 +12,7 @@ import {
   Check, 
   Sparkles, 
   Trash2,
+  Plus,
   Sliders,
   Ruler,
   Bot,
@@ -141,9 +142,45 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
   const [pocket, setPocket] = useState(m?.pocket || '1 Front, 1 Side');
   const [specialNotes, setSpecialNotes] = useState(initialCustomer?.notes || m?.specialNotes || '');
 
+  // Custom Measurement Fields for flexible tailoring
+  const [customFields, setCustomFields] = useState<Array<{ id: string; name: string; value: string }>>(
+    m?.customFields || []
+  );
+  const [newCustomFieldName, setNewCustomFieldName] = useState<string>('');
+  const [showAddCustomInput, setShowAddCustomInput] = useState<boolean>(false);
+
+  const handleAddCustomField = (fieldName: string) => {
+    const trimmed = fieldName.trim();
+    if (!trimmed) return;
+    const exists = customFields.some(f => f.name.toLowerCase() === trimmed.toLowerCase());
+    if (exists) {
+      setShowAddCustomInput(false);
+      setNewCustomFieldName('');
+      return;
+    }
+    setCustomFields(prev => [
+      ...prev,
+      {
+        id: `custom_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        name: trimmed,
+        value: ''
+      }
+    ]);
+    setNewCustomFieldName('');
+    setShowAddCustomInput(false);
+  };
+
+  const handleUpdateCustomField = (id: string, value: string) => {
+    setCustomFields(prev => prev.map(f => f.id === id ? { ...f, value } : f));
+  };
+
+  const handleRemoveCustomField = (id: string) => {
+    setCustomFields(prev => prev.filter(f => f.id !== id));
+  };
+
   const handleCategoryChange = (category: string) => {
     setDressCategory(category);
-    if (category === 'shalwar_qameez') {
+    if (category === 'shalwar_qameez' || category === 'kameez_shalwar') {
       setLength('40');
       setShoulder('18');
       setSleeves('22');
@@ -153,6 +190,56 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
       setCollar('15.5');
       setShalwar('37');
       setPancha('8.5');
+    } else if (category === 'kameez_only') {
+      setLength('40');
+      setShoulder('18');
+      setSleeves('22');
+      setChest('38');
+      setWaist('36');
+      setDaaman('26');
+      setCollar('15.5');
+      setShalwar('N/A');
+      setPancha('N/A');
+    } else if (category === 'shalwar_only') {
+      setLength('N/A');
+      setShoulder('N/A');
+      setSleeves('N/A');
+      setChest('N/A');
+      setWaist('36');
+      setDaaman('N/A');
+      setCollar('N/A');
+      setShalwar('38');
+      setPancha('8.5');
+    } else if (category === 'pant' || category === 'pant_only') {
+      setLength('39 (Pant)');
+      setShoulder('N/A');
+      setSleeves('N/A');
+      setChest('N/A');
+      setWaist('34 (Waist)');
+      setDaaman('N/A');
+      setCollar('N/A');
+      setShalwar('39');
+      setPancha('14.5 (Bottom)');
+    } else if (category === 'coat' || category === 'coat_only') {
+      setLength('29.5 (Coat)');
+      setShoulder('18.5');
+      setSleeves('24');
+      setChest('40');
+      setWaist('36');
+      setDaaman('N/A');
+      setCollar('16 (Neck)');
+      setShalwar('N/A');
+      setPancha('N/A');
+    } else if (category === 'coat_pant') {
+      setLength('30 (Coat)');
+      setShoulder('18.5');
+      setSleeves('24');
+      setChest('40');
+      setWaist('34 (Pant Waist)');
+      setDaaman('N/A');
+      setCollar('16 (Collar)');
+      setShalwar('40 (Pant)');
+      setPancha('15 (Bottom)');
     } else if (category === 'saudi_thobe') {
       setLength('56');
       setShoulder('19');
@@ -193,16 +280,6 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
       setCollar('15.5 (Ban)');
       setShalwar('38 (Pajama)');
       setPancha('7.5');
-    } else if (category === 'coat_pant') {
-      setLength('30');
-      setShoulder('18.5');
-      setSleeves('24');
-      setChest('40');
-      setWaist('34');
-      setDaaman('N/A');
-      setCollar('16');
-      setShalwar('40 (Pant)');
-      setPancha('15 (Bottom)');
     } else if (category === 'sherwani') {
       setLength('44');
       setShoulder('19');
@@ -563,17 +640,22 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
       ? `${selectedCountryCode} ${phone.trim()}` 
       : 'No phone number';
 
+    const customDetails = customFields
+      .filter(f => f.name.trim() && f.value.trim())
+      .map(f => `${f.name} : ${f.value}`);
+
     const cleanDetails = [
       length ? `Length (لمبائی) : ${length}` : '',
-      shoulder ? `Shoulder (تیرا) : ${shoulder}` : '',
+      shoulder ? `Shoulder (تیرہ) : ${shoulder}` : '',
       sleeves ? `Sleeve (بازو) : ${sleeves}` : '',
       chest ? `Chest (چھاتی) : ${chest}` : '',
       waist ? `Waist (کمر) : ${waist}` : '',
-      daaman ? `Daaman (دامان) : ${daaman}` : '',
-      collar ? `Collar/Ban (کالر/بین) : ${collar}` : '',
-      shalwar ? `Shalwar (شلوار) : ${shalwar}` : '',
-      pancha ? `Pancha (پائچہ) : ${pancha}` : '',
+      daaman ? `Daaman (دامن) : ${daaman}` : '',
+      collar ? `Neck/Collar/Ban (گلا/کالر/بین) : ${collar}` : '',
+      shalwar ? `Shalwar/Pant (شلوار/پینٹ) : ${shalwar}` : '',
+      pancha ? `Pancha/Bottom (پائچہ/موہری) : ${pancha}` : '',
       pocket ? `Pocket (پکٹ) : ${pocket}` : '',
+      ...customDetails,
       specialNotes ? `Notes (ہدایات) : ${specialNotes}` : ''
     ].filter(Boolean).join('\n');
 
@@ -588,7 +670,8 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
       shalwar,
       pancha,
       pocket,
-      specialNotes
+      specialNotes,
+      customFields
     };
 
     const totalNum = parseFloat(totalAmount) || 0;
@@ -1071,6 +1154,46 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
               </span>
             </div>
 
+            {/* Quick Garment Template Chips */}
+            <div className="space-y-1.5 shrink-0">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-extrabold text-emerald-900 flex items-center gap-1">
+                  <span>✨</span>
+                  <span>{isRtl ? 'ڈیزائن و ناپ ٹیمپلیٹ (Templates):' : 'Garment Templates:'}</span>
+                </span>
+                <span className="text-[9px] text-slate-500 font-medium">
+                  {isRtl ? 'کلک کر کے معیاری ناپ لوڈ کریں' : 'Click to load default preset'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
+                {[
+                  { id: 'shalwar_qameez', label: '🌟 قمیض شلوار', enLabel: 'Kameez Shalwar' },
+                  { id: 'kameez_only', label: '👔 صرف قمیض/کرتا', enLabel: 'Kameez Only' },
+                  { id: 'shalwar_only', label: '👖 صرف شلوار', enLabel: 'Shalwar Only' },
+                  { id: 'pant', label: '👖 پینٹ/ٹراؤزر', enLabel: 'Pant / Trouser' },
+                  { id: 'coat', label: '🧥 کوٹ/بلیزر', enLabel: 'Coat / Blazer' },
+                  { id: 'waist_coat', label: '🦺 ویسٹ کوٹ', enLabel: 'Waistcoat' },
+                  { id: 'saudi_thobe', label: '🕌 سعودی ثوب', enLabel: 'Saudi Thobe' },
+                ].map((tpl) => {
+                  const isActive = dressCategory === tpl.id;
+                  return (
+                    <button
+                      key={tpl.id}
+                      type="button"
+                      onClick={() => handleCategoryChange(tpl.id)}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap transition-all border shrink-0 cursor-pointer ${
+                        isActive
+                          ? 'bg-emerald-700 text-white border-emerald-800 shadow-xs scale-102 ring-1 ring-emerald-400'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-emerald-50 hover:text-emerald-900'
+                      }`}
+                    >
+                      {isRtl ? tpl.label : tpl.enLabel}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Compact Garment Category Dropdown */}
             <div className="bg-white p-1.5 rounded-lg border border-emerald-200 shrink-0">
               <select 
@@ -1080,11 +1203,15 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                 className="w-full px-2 py-1 rounded bg-slate-50 text-slate-800 text-[11px] font-bold outline-none cursor-pointer"
               >
                 <option value="shalwar_qameez">Shalwar Qameez (سلوار قمیض)</option>
-                <option value="saudi_thobe">Saudi Thobe (سعودی تووب)</option>
-                <option value="kurta">Kurta (کرتا)</option>
-                <option value="coat_pant">Coat Pant (کوٹ پینٹ)</option>
-                <option value="kwadi_thobe">Kuwaiti Thobe (کویتی تووب)</option>
+                <option value="kameez_only">Kameez / Kurta Only (صرف قمیض / کرتا)</option>
+                <option value="shalwar_only">Shalwar Only (صرف شلوار)</option>
+                <option value="pant">Pant / Trouser (پینٹ / ٹراؤزر)</option>
+                <option value="coat">Coat / Blazer (کوٹ / بلیزر)</option>
+                <option value="coat_pant">Coat Pant Suit (کوٹ پینٹ مکمل سوٹ)</option>
                 <option value="waist_coat">Waist Coat (ویسٹ کوٹ)</option>
+                <option value="saudi_thobe">Saudi Thobe (سعودی تووب)</option>
+                <option value="kwadi_thobe">Kuwaiti Thobe (کویتی تووب)</option>
+                <option value="kurta">Kurta (کرتا)</option>
                 <option value="sherwani">Sherwani (شیروانی)</option>
                 <option value="jodhpuri">Jodhpuri Suit (جودھپوری سوٹ)</option>
                 <option value="kurta_pajama">Kurta Pajama (کرتا پاجامہ)</option>
@@ -1094,7 +1221,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
               </select>
             </div>
 
-            {/* 9 Measurement Rows (Strictly Fitted & responsive to Cutting Mode) */}
+            {/* Measurement Rows (Strictly Fitted & responsive to Cutting Mode) */}
             <div id="measurementList" className="grid grid-cols-1 gap-1.5 text-xs flex-1">
               
               {/* 1. Length */}
@@ -1106,7 +1233,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                   type="text" 
                   value={length} 
                   onChange={(e) => setLength(e.target.value)}
-                  className={`measurement-input w-20 py-1 rounded border text-center font-bold text-xs outline-none transition-all ${
+                  className={`measurement-input w-24 py-1 rounded border text-center font-bold text-xs outline-none transition-all ${
                     isCuttingMode 
                       ? 'border-amber-400 bg-[#fef3c7] text-[#b45309] font-black text-[15px]' 
                       : 'border-slate-300 bg-white text-slate-800'
@@ -1123,7 +1250,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                   type="text" 
                   value={shoulder} 
                   onChange={(e) => setShoulder(e.target.value)}
-                  className={`measurement-input w-20 py-1 rounded border text-center font-bold text-xs outline-none transition-all ${
+                  className={`measurement-input w-24 py-1 rounded border text-center font-bold text-xs outline-none transition-all ${
                     isCuttingMode 
                       ? 'border-amber-400 bg-[#fef3c7] text-[#b45309] font-black text-[15px]' 
                       : 'border-slate-300 bg-white text-slate-800'
@@ -1140,7 +1267,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                   type="text" 
                   value={sleeves} 
                   onChange={(e) => setSleeves(e.target.value)}
-                  className={`measurement-input w-20 py-1 rounded border text-center font-bold text-xs outline-none transition-all ${
+                  className={`measurement-input w-24 py-1 rounded border text-center font-bold text-xs outline-none transition-all ${
                     isCuttingMode 
                       ? 'border-amber-400 bg-[#fef3c7] text-[#b45309] font-black text-[15px]' 
                       : 'border-slate-300 bg-white text-slate-800'
@@ -1157,7 +1284,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                   type="text" 
                   value={chest} 
                   onChange={(e) => setChest(e.target.value)}
-                  className={`measurement-input w-20 py-1 rounded border text-center font-bold text-xs outline-none transition-all ${
+                  className={`measurement-input w-24 py-1 rounded border text-center font-bold text-xs outline-none transition-all ${
                     isCuttingMode 
                       ? 'border-amber-400 bg-[#fef3c7] text-[#b45309] font-black text-[15px]' 
                       : 'border-slate-300 bg-white text-slate-800'
@@ -1174,7 +1301,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                   type="text" 
                   value={waist} 
                   onChange={(e) => setWaist(e.target.value)}
-                  className={`measurement-input w-20 py-1 rounded border text-center font-bold text-xs outline-none transition-all ${
+                  className={`measurement-input w-24 py-1 rounded border text-center font-bold text-xs outline-none transition-all ${
                     isCuttingMode 
                       ? 'border-amber-400 bg-[#fef3c7] text-[#b45309] font-black text-[15px]' 
                       : 'border-slate-300 bg-white text-slate-800'
@@ -1191,7 +1318,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                   type="text" 
                   value={daaman} 
                   onChange={(e) => setDaaman(e.target.value)}
-                  className={`measurement-input w-20 py-1 rounded border text-center font-bold text-xs outline-none transition-all ${
+                  className={`measurement-input w-24 py-1 rounded border text-center font-bold text-xs outline-none transition-all ${
                     isCuttingMode 
                       ? 'border-amber-400 bg-[#fef3c7] text-[#b45309] font-black text-[15px]' 
                       : 'border-slate-300 bg-white text-slate-800'
@@ -1199,7 +1326,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                 />
               </div>
 
-              {/* 7. Collar / Ban */}
+              {/* 7. Collar / Ban / Neck */}
               <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border transition-all ${isCuttingMode ? 'bg-amber-50 border-amber-300' : 'bg-white border-slate-200'}`}>
                 <span className={`font-bold text-[11px] ${isCuttingMode ? 'text-amber-950 font-black' : 'text-slate-700'}`}>
                   {t.collarLabel}
@@ -1208,7 +1335,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                   type="text" 
                   value={collar} 
                   onChange={(e) => setCollar(e.target.value)}
-                  className={`measurement-input w-20 py-1 rounded border text-center font-bold text-xs outline-none transition-all ${
+                  className={`measurement-input w-24 py-1 rounded border text-center font-bold text-xs outline-none transition-all ${
                     isCuttingMode 
                       ? 'border-amber-400 bg-[#fef3c7] text-[#b45309] font-black text-[15px]' 
                       : 'border-slate-300 bg-white text-slate-800'
@@ -1225,7 +1352,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                   type="text" 
                   value={shalwar} 
                   onChange={(e) => setShalwar(e.target.value)}
-                  className={`measurement-input w-20 py-1 rounded border text-center font-bold text-xs outline-none transition-all ${
+                  className={`measurement-input w-24 py-1 rounded border text-center font-bold text-xs outline-none transition-all ${
                     isCuttingMode 
                       ? 'border-amber-400 bg-[#fef3c7] text-[#b45309] font-black text-[15px]' 
                       : 'border-slate-300 bg-white text-slate-800'
@@ -1242,7 +1369,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                   type="text" 
                   value={pancha} 
                   onChange={(e) => setPancha(e.target.value)}
-                  className={`measurement-input w-20 py-1 rounded border text-center font-bold text-xs outline-none transition-all ${
+                  className={`measurement-input w-24 py-1 rounded border text-center font-bold text-xs outline-none transition-all ${
                     isCuttingMode 
                       ? 'border-amber-400 bg-[#fef3c7] text-[#b45309] font-black text-[15px]' 
                       : 'border-slate-300 bg-white text-slate-800'
@@ -1250,6 +1377,107 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                 />
               </div>
 
+              {/* Render Custom Fields */}
+              {customFields.map((field) => (
+                <div 
+                  key={field.id}
+                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border transition-all ${
+                    isCuttingMode ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50/40 border-emerald-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCustomField(field.id)}
+                      className="text-rose-500 hover:text-rose-700 p-0.5 rounded transition-colors cursor-pointer"
+                      title={isRtl ? 'حذف کریں' : 'Delete'}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                    <span className={`font-bold text-[11px] ${isCuttingMode ? 'text-amber-950 font-black' : 'text-emerald-900'}`}>
+                      {field.name}
+                    </span>
+                  </div>
+                  <input 
+                    type="text" 
+                    value={field.value} 
+                    onChange={(e) => handleUpdateCustomField(field.id, e.target.value)}
+                    placeholder="0"
+                    className={`measurement-input w-24 py-1 rounded border text-center font-bold text-xs outline-none transition-all ${
+                      isCuttingMode 
+                        ? 'border-amber-400 bg-[#fef3c7] text-[#b45309] font-black text-[15px]' 
+                        : 'border-emerald-300 bg-white text-slate-800 focus:border-emerald-600'
+                    }`}
+                  />
+                </div>
+              ))}
+
+            </div>
+
+            {/* Custom Field Addition Panel */}
+            <div className="p-2 bg-white rounded-xl border border-emerald-200 space-y-2 shrink-0">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-extrabold text-emerald-900 flex items-center gap-1">
+                  <Plus className="w-3 h-3 text-emerald-700" />
+                  <span>{isRtl ? 'اضافی کسٹم ناپ شامل کریں:' : 'Add Custom Measurement:'}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowAddCustomInput(!showAddCustomInput)}
+                  className="text-[10px] text-emerald-700 hover:text-emerald-900 font-bold underline cursor-pointer"
+                >
+                  {showAddCustomInput ? (isRtl ? 'بند کریں' : 'Close') : (isRtl ? '+ نیا نام لکھیں' : '+ Type Custom')}
+                </button>
+              </div>
+
+              {/* Quick Suggestion Chips for Tailoring */}
+              <div className="flex items-center gap-1 overflow-x-auto pb-0.5 no-scrollbar">
+                {[
+                  { nameUrdu: 'ہپ (Hips)', nameEn: 'Hips' },
+                  { nameUrdu: 'تھائی / ران (Thigh)', nameEn: 'Thigh' },
+                  { nameUrdu: 'کراس بیک (Cross Back)', nameEn: 'Cross Back' },
+                  { nameUrdu: 'بائسپ / موڈھا (Bicep)', nameEn: 'Bicep' },
+                  { nameUrdu: 'کف چوڑائی (Cuff)', nameEn: 'Cuff' },
+                  { nameUrdu: 'آسن (Rise)', nameEn: 'Rise / Aasan' },
+                  { nameUrdu: 'گوڈا / گھٹنا (Knee)', nameEn: 'Knee' },
+                  { nameUrdu: 'فرنٹ لمبائی (Front Length)', nameEn: 'Front Length' },
+                ].map((item, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleAddCustomField(isRtl ? item.nameUrdu : item.nameEn)}
+                    className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-full text-[9px] font-bold whitespace-nowrap transition-colors cursor-pointer shrink-0"
+                  >
+                    + {isRtl ? item.nameUrdu : item.nameEn}
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom Input Box if tailor wants custom name */}
+              {showAddCustomInput && (
+                <div className="flex items-center gap-1.5 pt-1">
+                  <input
+                    type="text"
+                    value={newCustomFieldName}
+                    onChange={(e) => setNewCustomFieldName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddCustomField(newCustomFieldName);
+                      }
+                    }}
+                    placeholder={isRtl ? 'ناپ کا نام لکھیں (مثلاً: بیک لمبائی، کالر کف)' : 'Enter custom field name...'}
+                    className="flex-1 px-2.5 py-1 text-xs border border-emerald-300 rounded-lg outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddCustomField(newCustomFieldName)}
+                    className="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    {isRtl ? 'شامل کریں' : 'Add'}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Customer Note & Tailoring Preferences (کسٹمر نوٹ اور خصوصی فرمائش) */}
