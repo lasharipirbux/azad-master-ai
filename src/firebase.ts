@@ -41,6 +41,42 @@ declare global {
 }
 
 /**
+ * Hardcoded production defaults for Azad Master Project (empyrean-rigging-4lcf1)
+ * Used as 100% resilient fallback for GitHub/Vercel deployments when environment variables are omitted or invalid.
+ */
+export const PROD_FIREBASE_CREDENTIALS = {
+  apiKey: "AIzaSyAjQ7cTB4kH77svICmQGCdhbhSz5IXUpCY",
+  authDomain: "empyrean-rigging-4lcf1.firebaseapp.com",
+  projectId: "empyrean-rigging-4lcf1",
+  storageBucket: "empyrean-rigging-4lcf1.firebasestorage.app",
+  messagingSenderId: "233024949239",
+  appId: "1:233024949239:web:977cadbde0f974b5ae3cf2",
+  firestoreDatabaseId: "ai-studio-azadmastertailor-5ebcf705-17cc-4a0d-a990-93d623364a7a",
+  oAuthClientId: "233024949239-q8uoq10lbaljbm3fob8396k8us09sl6n.apps.googleusercontent.com"
+} as const;
+
+/**
+ * Cleans string values from accidental quotes, newlines, or whitespace
+ */
+function sanitizeValue(val: any): string {
+  if (!val || typeof val !== 'string') return '';
+  return val.trim().replace(/^["']|["']$/g, '').trim();
+}
+
+/**
+ * Validates whether an API Key string is a genuine Google/Firebase API key
+ */
+function isValidFirebaseApiKey(key: any): boolean {
+  const clean = sanitizeValue(key);
+  if (!clean || clean.length < 25) return false;
+  if (['undefined', 'null', 'your_api_key', 'placeholder', 'none', 'false'].includes(clean.toLowerCase())) {
+    return false;
+  }
+  // Google API keys always start with AIza
+  return clean.startsWith('AIza');
+}
+
+/**
  * Safely extracts environment variables from multiple runtime sources:
  * 1. window.env or window.__ENV__ (Runtime injection in browser/Vercel)
  * 2. process.env (Node / Webpack / Next.js bundler injection)
@@ -51,14 +87,14 @@ function getRuntimeEnv(keys: string[]): string | undefined {
     const win = window as any;
     if (win.env && typeof win.env === 'object') {
       for (const k of keys) {
-        const val = win.env[k];
-        if (typeof val === 'string' && val.trim() !== '') return val.trim();
+        const val = sanitizeValue(win.env[k]);
+        if (val && !['undefined', 'null'].includes(val.toLowerCase())) return val;
       }
     }
     if (win.__ENV__ && typeof win.__ENV__ === 'object') {
       for (const k of keys) {
-        const val = win.__ENV__[k];
-        if (typeof val === 'string' && val.trim() !== '') return val.trim();
+        const val = sanitizeValue(win.__ENV__[k]);
+        if (val && !['undefined', 'null'].includes(val.toLowerCase())) return val;
       }
     }
   }
@@ -66,8 +102,8 @@ function getRuntimeEnv(keys: string[]): string | undefined {
   try {
     if (typeof process !== 'undefined' && process && process.env) {
       for (const k of keys) {
-        const val = process.env[k];
-        if (typeof val === 'string' && val.trim() !== '') return val.trim();
+        const val = sanitizeValue(process.env[k]);
+        if (val && !['undefined', 'null'].includes(val.toLowerCase())) return val;
       }
     }
   } catch {}
@@ -75,8 +111,8 @@ function getRuntimeEnv(keys: string[]): string | undefined {
   try {
     if (typeof import.meta !== 'undefined' && (import.meta as any)?.env) {
       for (const k of keys) {
-        const val = (import.meta as any).env[k];
-        if (typeof val === 'string' && val.trim() !== '') return val.trim();
+        const val = sanitizeValue((import.meta as any).env[k]);
+        if (val && !['undefined', 'null'].includes(val.toLowerCase())) return val;
       }
     }
   } catch {}
@@ -94,26 +130,64 @@ export interface FirebaseAppConfig {
   firestoreDatabaseId?: string;
 }
 
-const defaultApiKey = (firebaseConfig && (firebaseConfig as any).apiKey) || 'AIzaSyAjQ7cTB4kH77svICmQGCdhbhSz5IXUpCY';
-const defaultAuthDomain = (firebaseConfig && (firebaseConfig as any).authDomain) || 'empyrean-rigging-4lcf1.firebaseapp.com';
-const defaultProjectId = (firebaseConfig && (firebaseConfig as any).projectId) || 'empyrean-rigging-4lcf1';
-const defaultStorageBucket = (firebaseConfig && (firebaseConfig as any).storageBucket) || 'empyrean-rigging-4lcf1.firebasestorage.app';
-const defaultMessagingSenderId = (firebaseConfig && (firebaseConfig as any).messagingSenderId) || '233024949239';
-const defaultAppId = (firebaseConfig && (firebaseConfig as any).appId) || '1:233024949239:web:977cadbde0f974b5ae3cf2';
-const defaultFirestoreDatabaseId = (firebaseConfig && (firebaseConfig as any).firestoreDatabaseId) || 'ai-studio-azadmastertailor-5ebcf705-17cc-4a0d-a990-93d623364a7a';
+// Compute verified, bulletproof Firebase configuration
+function resolveFirebaseConfig(): FirebaseAppConfig {
+  // 1. Resolve API Key with strict validation
+  const envApiKey = getRuntimeEnv(['VITE_FIREBASE_API_KEY', 'REACT_APP_FIREBASE_API_KEY', 'NEXT_PUBLIC_FIREBASE_API_KEY']);
+  const jsonApiKey = (firebaseConfig as any)?.apiKey;
+  
+  let validApiKey: string = PROD_FIREBASE_CREDENTIALS.apiKey;
+  if (isValidFirebaseApiKey(envApiKey)) {
+    validApiKey = sanitizeValue(envApiKey);
+  } else if (isValidFirebaseApiKey(jsonApiKey)) {
+    validApiKey = sanitizeValue(jsonApiKey);
+  }
+
+  // 2. Resolve Auth Domain
+  const envAuthDomain = getRuntimeEnv(['VITE_FIREBASE_AUTH_DOMAIN', 'REACT_APP_FIREBASE_AUTH_DOMAIN', 'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN']);
+  const jsonAuthDomain = (firebaseConfig as any)?.authDomain;
+  const validAuthDomain: string = sanitizeValue(envAuthDomain) || sanitizeValue(jsonAuthDomain) || PROD_FIREBASE_CREDENTIALS.authDomain;
+
+  // 3. Resolve Project ID
+  const envProjectId = getRuntimeEnv(['VITE_FIREBASE_PROJECT_ID', 'REACT_APP_FIREBASE_PROJECT_ID', 'NEXT_PUBLIC_FIREBASE_PROJECT_ID']);
+  const jsonProjectId = (firebaseConfig as any)?.projectId;
+  const validProjectId: string = sanitizeValue(envProjectId) || sanitizeValue(jsonProjectId) || PROD_FIREBASE_CREDENTIALS.projectId;
+
+  // 4. Resolve Storage Bucket
+  const envStorage = getRuntimeEnv(['VITE_FIREBASE_STORAGE_BUCKET', 'REACT_APP_FIREBASE_STORAGE_BUCKET']);
+  const jsonStorage = (firebaseConfig as any)?.storageBucket;
+  const validStorage: string = sanitizeValue(envStorage) || sanitizeValue(jsonStorage) || PROD_FIREBASE_CREDENTIALS.storageBucket;
+
+  // 5. Resolve Messaging Sender ID
+  const envSenderId = getRuntimeEnv(['VITE_FIREBASE_MESSAGING_SENDER_ID', 'REACT_APP_FIREBASE_MESSAGING_SENDER_ID']);
+  const jsonSenderId = (firebaseConfig as any)?.messagingSenderId;
+  const validSenderId: string = sanitizeValue(envSenderId) || sanitizeValue(jsonSenderId) || PROD_FIREBASE_CREDENTIALS.messagingSenderId;
+
+  // 6. Resolve App ID
+  const envAppId = getRuntimeEnv(['VITE_FIREBASE_APP_ID', 'REACT_APP_FIREBASE_APP_ID']);
+  const jsonAppId = (firebaseConfig as any)?.appId;
+  const validAppId: string = sanitizeValue(envAppId) || sanitizeValue(jsonAppId) || PROD_FIREBASE_CREDENTIALS.appId;
+
+  // 7. Resolve Database ID
+  const envDbId = getRuntimeEnv(['VITE_FIREBASE_DATABASE_ID']);
+  const jsonDbId = (firebaseConfig as any)?.firestoreDatabaseId;
+  const validDbId: string = sanitizeValue(envDbId) || sanitizeValue(jsonDbId) || PROD_FIREBASE_CREDENTIALS.firestoreDatabaseId;
+
+  return {
+    apiKey: validApiKey,
+    authDomain: validAuthDomain,
+    projectId: validProjectId,
+    storageBucket: validStorage,
+    messagingSenderId: validSenderId,
+    appId: validAppId,
+    firestoreDatabaseId: validDbId
+  };
+}
 
 /**
  * Real Firebase production configuration object loaded from credentials or environment
  */
-export const activeFirebaseConfig: FirebaseAppConfig = {
-  apiKey: getRuntimeEnv(['VITE_FIREBASE_API_KEY', 'REACT_APP_FIREBASE_API_KEY', 'NEXT_PUBLIC_FIREBASE_API_KEY']) || defaultApiKey,
-  authDomain: getRuntimeEnv(['VITE_FIREBASE_AUTH_DOMAIN', 'REACT_APP_FIREBASE_AUTH_DOMAIN', 'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN']) || defaultAuthDomain,
-  projectId: getRuntimeEnv(['VITE_FIREBASE_PROJECT_ID', 'REACT_APP_FIREBASE_PROJECT_ID', 'NEXT_PUBLIC_FIREBASE_PROJECT_ID']) || defaultProjectId,
-  storageBucket: getRuntimeEnv(['VITE_FIREBASE_STORAGE_BUCKET', 'REACT_APP_FIREBASE_STORAGE_BUCKET']) || defaultStorageBucket,
-  messagingSenderId: getRuntimeEnv(['VITE_FIREBASE_MESSAGING_SENDER_ID', 'REACT_APP_FIREBASE_MESSAGING_SENDER_ID']) || defaultMessagingSenderId,
-  appId: getRuntimeEnv(['VITE_FIREBASE_APP_ID', 'REACT_APP_FIREBASE_APP_ID']) || defaultAppId,
-  firestoreDatabaseId: getRuntimeEnv(['VITE_FIREBASE_DATABASE_ID']) || defaultFirestoreDatabaseId,
-};
+export const activeFirebaseConfig: FirebaseAppConfig = resolveFirebaseConfig();
 
 /**
  * Returns active Firebase production configuration
@@ -125,7 +199,21 @@ export function loadFirebaseConfig(): FirebaseAppConfig {
 /**
  * Initialize live Firebase App directly with the project's actual production keys
  */
-export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(activeFirebaseConfig);
+export const app: FirebaseApp = (() => {
+  try {
+    if (getApps().length > 0) {
+      return getApp();
+    }
+    return initializeApp(activeFirebaseConfig);
+  } catch (initErr) {
+    console.warn("⚠️ Firebase initializeApp error, retrying with verified production fallback credentials:", initErr);
+    try {
+      return initializeApp(PROD_FIREBASE_CREDENTIALS, 'azad-master-fallback');
+    } catch {
+      return getApps()[0] || initializeApp(PROD_FIREBASE_CREDENTIALS);
+    }
+  }
+})();
 
 // Clean Auth and Firestore instances derived directly from the live initialized app instance
 export const auth = getAuth(app);
