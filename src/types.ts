@@ -35,6 +35,8 @@ export interface Customer {
   totalAmount?: number | string;
   advanceAmount?: number | string;
   balanceAmount?: number | string;
+  notes?: string;
+  avatarColor?: string;
 }
 
 export interface CountryCode {

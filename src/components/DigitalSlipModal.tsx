@@ -22,6 +22,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { getDeliveryStatus } from '../utils/deliveryDate';
+import { getAvatarColorByName, getCustomerInitial } from '../utils/avatarColors';
 
 interface DigitalSlipModalProps {
   slip: Customer;
@@ -132,7 +133,35 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
     return encodeURIComponent(msg);
   };
 
+  const formatSuitReadyWhatsAppMessage = () => {
+    let msg = `✨ *آزاد ماسٹر (AZAD MASTER) - اطلاع برائے سوٹ تیاری* ✨\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `محترم جناب *${slip.name || 'محترم گاہک'}* صاحب،\n`;
+    msg += `السلام علیکم! آپ کا سوٹ سل کر بالکل تیار ہو چکا ہے اور دکان پر وصولی کے لیے موجود ہے۔ 🪡✨\n\n`;
+    msg += `📅 *بکنگ تاریخ:* ${slip.date}\n`;
+    if (slip.deliveryDate) {
+      msg += `🚀 *مقررہ ڈیلیوری:* ${slip.deliveryDate}\n`;
+    }
+    if (slip.totalAmount !== undefined && slip.totalAmount !== null && slip.totalAmount !== '') {
+      const tot = parseFloat(String(slip.totalAmount)) || 0;
+      const adv = parseFloat(String(slip.advanceAmount || 0)) || 0;
+      const bal = slip.balanceAmount !== undefined && slip.balanceAmount !== '' 
+        ? slip.balanceAmount 
+        : Math.max(0, tot - adv);
+      if (Number(bal) > 0) {
+        msg += `⏳ *بقایا رقم:* Rs. ${bal}\n`;
+      } else {
+        msg += `✅ *بل:* مکمل ادا شدہ (Paid)\n`;
+      }
+    }
+    msg += `\nآپ کسی بھی وقت تشریف لا کر اپنا تیار سوٹ وصول فرما سکتے ہیں۔\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `شکریہ!\n*آزاد ماسٹر ٹیلرز*`;
+    return encodeURIComponent(msg);
+  };
+
   const whatsappMessage = formatSlipWhatsAppMessage();
+  const suitReadyMessage = formatSuitReadyWhatsAppMessage();
 
   const handleCopy = () => {
     let billText = '';
@@ -185,13 +214,25 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
           </div>
           
           <div className="flex flex-col items-center justify-center gap-1.5 mb-2">
-            <div className="w-14 h-14 rounded-full overflow-hidden bg-[#e7f7ef] border-2 border-white/80 flex items-center justify-center text-[#075e54] font-bold text-xl shadow-md">
-              {slip.imageUri ? (
-                <img src={slip.imageUri} alt={slip.name} className="w-full h-full object-cover" />
-              ) : (
-                <span>{slip.name ? slip.name.trim().charAt(0).toUpperCase() : 'P'}</span>
-              )}
-            </div>
+            {(() => {
+              const avatarTheme = getAvatarColorByName(slip.name, slip.avatarColor);
+              const initialChar = getCustomerInitial(slip.name);
+              return (
+                <div 
+                  className={`w-16 h-16 rounded-2xl overflow-hidden ${
+                    slip.imageUri && slip.imageUri.trim() !== ''
+                      ? 'bg-white border-2 border-white/80'
+                      : `${avatarTheme.gradientClass} ${avatarTheme.solidTextClass} border-2 border-white ring-2 ${avatarTheme.ringClass}`
+                  } flex items-center justify-center font-black text-2xl shadow-lg`}
+                >
+                  {slip.imageUri && slip.imageUri.trim() !== '' ? (
+                    <img src={slip.imageUri} alt={slip.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="select-none leading-none drop-shadow-xs">{initialChar}</span>
+                  )}
+                </div>
+              );
+            })()}
             <h2 className="text-xl font-extrabold tracking-tight text-white">{slip.name}</h2>
           </div>
           
@@ -343,6 +384,19 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
             </div>
           )}
 
+          {/* Customer Note & Tailoring Preferences (کسٹمر نوٹ و خصوصی فرمائش) */}
+          {(slip.notes || slip.measurementsObj?.specialNotes) && (
+            <div className="bg-amber-50/90 border-2 border-amber-300 p-3 rounded-xl shadow-xs">
+              <div className="flex items-center gap-1.5 text-amber-900 font-black text-xs mb-1">
+                <span>📝</span>
+                <span>{isRtl ? 'کسٹمر نوٹ و خاص فرمائش (کٹنگ و سلائی نوٹ):' : 'Customer Note & Special Instructions:'}</span>
+              </div>
+              <p className="text-xs sm:text-sm font-bold text-amber-950 whitespace-pre-wrap leading-relaxed">
+                {slip.notes || slip.measurementsObj?.specialNotes}
+              </p>
+            </div>
+          )}
+
           {/* Formatted Table/Card for measurements */}
           <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs">
             <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-100">
@@ -398,16 +452,30 @@ export const DigitalSlipModal: React.FC<DigitalSlipModalProps> = ({
 
         {/* WhatsApp & Print Actions */}
         <div className="p-3 bg-white border-t border-slate-200/80 space-y-2">
-          <a 
-            id="whatsapp-share-link"
-            href={`https://wa.me/${cleanPhoneForWhatsApp}?text=${whatsappMessage}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20ba59] active:bg-[#1caa50] text-white py-2.5 px-4 rounded-xl font-bold text-sm shadow-sm transition-all text-center"
-          >
-            <MessageCircle className="w-4 h-4 fill-white" />
-            <span>{t.sendWhatsapp}</span>
-          </a>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <a 
+              id="whatsapp-share-link"
+              href={`https://wa.me/${cleanPhoneForWhatsApp}?text=${whatsappMessage}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-1.5 bg-[#25D366] hover:bg-[#20ba59] active:bg-[#1caa50] text-white py-2 px-3 rounded-xl font-bold text-xs sm:text-sm shadow-2xs transition-all text-center"
+            >
+              <MessageCircle className="w-4 h-4 fill-white shrink-0" />
+              <span>{t.sendWhatsapp || (isRtl ? 'واٹس ایپ پرچی' : 'WhatsApp Slip')}</span>
+            </a>
+
+            <a 
+              id="whatsapp-ready-alert-link"
+              href={`https://wa.me/${cleanPhoneForWhatsApp}?text=${suitReadyMessage}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 text-white py-2 px-3 rounded-xl font-bold text-xs sm:text-sm shadow-2xs transition-all text-center"
+              title={isRtl ? 'گاہک کو واٹس ایپ پر سوٹ تیاری کا میسج بھیجیں' : 'Send Suit is Ready Alert to Customer'}
+            >
+              <PackageCheck className="w-4 h-4 shrink-0" />
+              <span>{isRtl ? 'سوٹ تیار ہے الرٹ' : 'Suit Ready Alert'}</span>
+            </a>
+          </div>
 
           {showDeleteConfirm ? (
             <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-2 animate-in fade-in">

@@ -157,7 +157,7 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
       recognitionRef.current = recognition;
 
       recognition.lang = getSpeechLang();
-      recognition.continuous = false;
+      recognition.continuous = true;
       recognition.interimResults = true;
 
       recognition.onstart = () => {
@@ -206,6 +206,13 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
 
       recognition.onend = () => {
         if (!isMountedRef.current) return;
+        if (!isMutedRef.current && conversationState === 'listening') {
+          setTimeout(() => {
+            if (isMountedRef.current && !isMutedRef.current && conversationState === 'listening') {
+              startListening();
+            }
+          }, 150);
+        }
       };
 
       recognition.start();

@@ -62,6 +62,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [cloudSyncMsg, setCloudSyncMsg] = useState<string | null>(null);
+  
+  // Offline Syncing Toggle Enhancement State
+  const [autoOfflineSync, setAutoOfflineSync] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('azad_master_auto_offline_sync');
+      return stored !== null ? stored === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleAutoOfflineSync = () => {
+    const nextVal = !autoOfflineSync;
+    setAutoOfflineSync(nextVal);
+    try {
+      localStorage.setItem('azad_master_auto_offline_sync', String(nextVal));
+    } catch {}
+    setCloudSyncMsg(
+      nextVal 
+        ? (isRtl ? '✅ آف لائن آٹو سنکنگ فعال ہو گئی! انٹرنیٹ بحال ہوتے ہی ڈیٹا کلاؤڈ پر منتقل ہو جائے گا۔' : '✅ Offline Auto-Sync Enabled! Data will sync to cloud when online.')
+        : (isRtl ? '⚠️ آف لائن آٹو سنکنگ بند کر دی گئی۔' : '⚠️ Offline Auto-Sync Disabled.')
+    );
+    setTimeout(() => setCloudSyncMsg(null), 3500);
+  };
 
   const handleCloudSyncClick = async () => {
     if (!onSyncToCloud) return;
@@ -198,7 +222,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="text-center space-y-2 bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
             <div className="relative inline-block">
               <div className="w-20 h-20 rounded-full border-3 border-[#0d4a2a] overflow-hidden mx-auto bg-slate-100 flex items-center justify-center shadow-sm">
-                {photo ? (
+                {photo && photo.trim() !== '' ? (
                   <img src={photo} alt="Master" className="w-full h-full object-cover" />
                 ) : (
                   <User className="w-10 h-10 text-slate-400" />
@@ -372,6 +396,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 ? 'تمام گاہکوں کے ریکارڈز، پیمائشیں اور سلائی کھاتہ / بقایا رقم گوگل کلاؤڈ فائر بیس میں خودکار محفوظ ہو رہے ہیں۔'
                 : 'All customer records, measurements, and billing/balance accounts are automatically synchronized to Google Cloud Firestore.'}
             </p>
+
+            {/* Offline Syncing Toggle Enhancement */}
+            <div className="p-2.5 bg-white rounded-lg border border-emerald-300 flex items-center justify-between gap-2 shadow-2xs">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-slate-900">
+                    {isRtl ? 'آف لائن ڈیٹا آٹو سنکنگ' : 'Offline Auto-Syncing'}
+                  </span>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${autoOfflineSync ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+                    {autoOfflineSync ? (isRtl ? 'آن (Active)' : 'ON') : (isRtl ? 'آف' : 'OFF')}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                  {isRtl 
+                    ? 'انٹرنیٹ بند ہونے پر ناپ فون میں محفوظ ہوں اور بحال ہونے پر خودکار کلاؤڈ پر منتقل ہو جائیں۔' 
+                    : 'Save records locally when offline & auto-upload to cloud when connection returns.'}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                id="toggle-offline-sync-btn"
+                role="switch"
+                aria-checked={autoOfflineSync}
+                onClick={handleToggleAutoOfflineSync}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  autoOfflineSync ? 'bg-[#0d4a2a]' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                    autoOfflineSync ? (isRtl ? '-translate-x-5' : 'translate-x-5') : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
 
             <div className="bg-white/80 p-2.5 rounded-lg border border-emerald-200/80 text-[11px] text-slate-700 space-y-1">
               <div className="flex justify-between items-center">

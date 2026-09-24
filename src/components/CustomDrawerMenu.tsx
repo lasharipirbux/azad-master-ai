@@ -2,16 +2,18 @@ import React, { useState } from 'react';
 import { SupportedLanguage } from '../types';
 import { languageList } from '../data/translations';
 import { Scissors } from 'lucide-react';
+import { PWAInstallButton } from './PWAInstallButton';
 
 export interface CustomDrawerMenuProps {
   visible: boolean;
   onClose: () => void;
-  onNavigate: (route: 'Profile' | 'Language' | 'Backup' | 'Help') => void;
+  onNavigate: (route: 'Profile' | 'Analytics' | 'BulkMessaging' | 'Language' | 'Backup' | 'Help') => void;
   onLogout: () => void;
   currentLang?: SupportedLanguage;
   onChangeLanguage?: (lang: SupportedLanguage) => void;
   masterName?: string;
   userPhone?: string;
+  userEmail?: string;
   isRtl?: boolean;
 }
 
@@ -239,6 +241,7 @@ export const CustomDrawerMenu: React.FC<CustomDrawerMenuProps> = ({
   onChangeLanguage,
   masterName,
   userPhone,
+  userEmail,
   isRtl = false,
 }) => {
   const [showLangPicker, setShowLangPicker] = useState(false);
@@ -275,9 +278,16 @@ export const CustomDrawerMenu: React.FC<CustomDrawerMenuProps> = ({
                 {t.menuTitle}
               </h3>
               {masterName ? (
-                <p className="text-[11px] text-[#dcf8c6] truncate mt-0.5 font-medium">
-                  {masterName} {userPhone ? `• ${userPhone}` : ''}
-                </p>
+                <div className="mt-0.5">
+                  <p className="text-[11px] text-[#dcf8c6] truncate font-bold">
+                    {masterName}
+                  </p>
+                  {userEmail && (
+                    <p className="text-[9.5px] text-emerald-200 truncate font-mono" dir="ltr">
+                      {userEmail}
+                    </p>
+                  )}
+                </div>
               ) : (
                 <p className="text-[10px] text-[#dcf8c6]/90 uppercase tracking-wider font-semibold">
                   By Naseeb SEO
@@ -312,6 +322,44 @@ export const CustomDrawerMenu: React.FC<CustomDrawerMenuProps> = ({
             <span className="flex items-center gap-2.5 truncate">
               <span className="text-base shrink-0">⚙️</span>
               <span className="truncate">{t.profileSettings}</span>
+            </span>
+          </button>
+
+          {/* 1.5 Business & Customer Analytics */}
+          <button
+            type="button"
+            id="drawer-item-analytics"
+            className="w-full text-left rtl:text-right px-3 py-2.5 hover:bg-emerald-50 active:bg-emerald-100 rounded-xl transition-colors flex items-center justify-between cursor-pointer border border-emerald-200/60 bg-emerald-50/40 text-[13px] text-emerald-900 font-bold"
+            onClick={() => {
+              onClose();
+              onNavigate('Analytics');
+            }}
+          >
+            <span className="flex items-center gap-2.5 truncate">
+              <span className="text-base shrink-0">📊</span>
+              <span className="truncate">{isRtl ? 'دکان کی بزنس رپورٹ و تجزیہ' : 'Business & Customer Analytics'}</span>
+            </span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-600 text-white font-black">
+              NEW
+            </span>
+          </button>
+
+          {/* 1.6 Bulk WhatsApp / SMS Messaging */}
+          <button
+            type="button"
+            id="drawer-item-bulk-message"
+            className="w-full text-left rtl:text-right px-3 py-2.5 hover:bg-[#e7f7ef] active:bg-[#dcf8c6] rounded-xl transition-colors flex items-center justify-between cursor-pointer border border-[#25d366]/30 bg-[#f0faf4] text-[13px] text-[#075e54] font-bold"
+            onClick={() => {
+              onClose();
+              onNavigate('BulkMessaging');
+            }}
+          >
+            <span className="flex items-center gap-2.5 truncate">
+              <span className="text-base shrink-0">📢</span>
+              <span className="truncate">{isRtl ? 'بلک واٹس ایپ / ایس ایم ایس' : 'Bulk WhatsApp / SMS'}</span>
+            </span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#25d366] text-white font-black shadow-2xs">
+              SAFE
             </span>
           </button>
 
@@ -414,12 +462,17 @@ export const CustomDrawerMenu: React.FC<CustomDrawerMenuProps> = ({
               <span className="truncate">{t.helpSupport}</span>
             </span>
           </button>
+
+          {/* 5. Mobile App PWA Install Button */}
+          <div className="pt-1">
+            <PWAInstallButton isRtl={isRtl} variant="drawer" />
+          </div>
         </div>
 
         {/* Divider */}
         <div className="h-px bg-slate-100 mx-2 my-0.5" />
 
-        {/* 5. Logout Button */}
+        {/* 6. Logout Button */}
         <div className="p-1.5">
           <button
             type="button"

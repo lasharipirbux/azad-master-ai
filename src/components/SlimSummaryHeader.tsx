@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { TranslationDictionary } from '../data/translations';
 
 export interface SlimSummaryHeaderProps {
@@ -19,7 +19,7 @@ export interface SlimSummaryHeaderProps {
  * - lateCard: #fff5f5 مع #ffc9c9 بارڈر
  * - cardCount: #fff پس منظر، 13px بولڈ، 0.5px بارڈر
  */
-export const SlimSummaryHeader: React.FC<SlimSummaryHeaderProps> = ({
+export const SlimSummaryHeader: React.FC<SlimSummaryHeaderProps> = memo(({
   todayCount = 0,
   lateCount = 0,
   onTodayPress,
@@ -182,6 +182,6 @@ export const SlimSummaryHeader: React.FC<SlimSummaryHeaderProps> = ({
       </button>
     </div>
   );
-};
+});
 
 export default SlimSummaryHeader;

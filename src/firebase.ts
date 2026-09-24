@@ -129,6 +129,7 @@ export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(
 
 // Clean Auth and Firestore instances derived directly from the live initialized app instance
 export const auth = getAuth(app);
+export const googleProvider = new GoogleAuthProvider();
 
 const firestoreDbId = activeFirebaseConfig.firestoreDatabaseId && activeFirebaseConfig.firestoreDatabaseId !== '(default)'
   ? activeFirebaseConfig.firestoreDatabaseId
@@ -857,4 +858,6 @@ export async function saveMeasurementToFirebase(data: {
     return { success: false };
   }
 }
+
+export default app;
 

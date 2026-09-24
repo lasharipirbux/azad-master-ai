@@ -96,6 +96,8 @@ export const ChatbotModal: React.FC<ChatbotModalProps> = ({
   // User's voiceReplyOn toggle: default true (awaaz mein jawab on rahe)
   const [voiceReplyOn, setVoiceReplyOn] = useState<boolean>(true);
   const [isListening, setIsListening] = useState<boolean>(false);
+  const isListeningRef = useRef<boolean>(false);
+  const accumulatedTranscriptRef = useRef<string>('');
   const recognitionRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -349,6 +351,16 @@ export const ChatbotModal: React.FC<ChatbotModalProps> = ({
     return `Thank you ${callerTitle}! I am here to help you manage measurements accurately.`;
   };
 
+  const stopListening = () => {
+    isListeningRef.current = false;
+    setIsListening(false);
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+    }
+  };
+
   const handleMicClick = () => {
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
       alert(t.voiceNotSupported || (currentLang === 'ur' ? 'اس براؤزر میں وائس ان پٹ سپورٹ نہیں ہے۔' : 'Voice input is not supported in this browser.'));
@@ -356,38 +368,91 @@ export const ChatbotModal: React.FC<ChatbotModalProps> = ({
     }
 
     if (isListening) {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch {}
-      }
-      setIsListening(false);
+      stopListening();
     } else {
       try {
+        if (recognitionRef.current) {
+          try {
+            recognitionRef.current.abort();
+          } catch {}
+        }
+
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
         recognitionRef.current = recognition;
-        recognition.lang = getSpeechLangCode();
-        recognition.continuous = false;
-        recognition.interimResults = false;
 
-        recognition.onresult = (event: any) => {
-          const transcript = event.results[0][0].transcript;
-          setInputText(transcript);
+        // ur-PK for Pakistani Urdu and local numbers
+        const speechLang = currentLang === 'ur' || currentLang === 'sd' ? 'ur-PK' : getSpeechLangCode();
+        recognition.lang = speechLang;
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
+
+        isListeningRef.current = true;
+        setIsListening(true);
+        accumulatedTranscriptRef.current = inputText ? inputText.trim() + ' ' : '';
+
+        recognition.onstart = () => {
+          setIsListening(true);
         };
 
-        recognition.onerror = () => {
-          setIsListening(false);
+        recognition.onresult = (event: any) => {
+          let sessionFinal = '';
+          let interim = '';
+
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            const trans = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              sessionFinal += trans + ' ';
+            } else {
+              interim += trans;
+            }
+          }
+
+          if (sessionFinal) {
+            accumulatedTranscriptRef.current += sessionFinal;
+          }
+
+          const fullSpoken = (accumulatedTranscriptRef.current + interim).trim();
+          if (fullSpoken) {
+            setInputText(fullSpoken);
+          }
+        };
+
+        recognition.onerror = (event: any) => {
+          console.warn('SpeechRecognition error in continuous mode:', event.error);
+          if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+            isListeningRef.current = false;
+            setIsListening(false);
+          }
+          // Do not turn off for no-speech or network pauses - onend will restart it!
         };
 
         recognition.onend = () => {
-          setIsListening(false);
+          // Keep listening continuously across pauses/silence until user clicks mic again or sends message!
+          if (isListeningRef.current) {
+            try {
+              recognition.start();
+            } catch (e) {
+              setTimeout(() => {
+                if (isListeningRef.current) {
+                  try {
+                    recognition.start();
+                  } catch (err) {
+                    console.warn('SpeechRecognition restart error:', err);
+                  }
+                }
+              }, 200);
+            }
+          } else {
+            setIsListening(false);
+          }
         };
 
         recognition.start();
-        setIsListening(true);
       } catch (err) {
         console.warn('SpeechRecognition failed to start:', err);
+        isListeningRef.current = false;
         setIsListening(false);
       }
     }
@@ -398,11 +463,12 @@ export const ChatbotModal: React.FC<ChatbotModalProps> = ({
     if (!text.trim()) return;
 
     // stop any ongoing mic listening when sending
-    if (isListening && recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {}
+    if (isListeningRef.current || (isListening && recognitionRef.current)) {
+      isListeningRef.current = false;
       setIsListening(false);
+      try {
+        recognitionRef.current?.stop();
+      } catch {}
     }
 
     const userMsg: ChatMessage = {
@@ -773,6 +839,23 @@ export const ChatbotModal: React.FC<ChatbotModalProps> = ({
             </span>
           </button>
         </div>
+
+        {/* Continuous Voice Indicator */}
+        {isListening && (
+          <div className="px-3 py-1.5 bg-amber-500/10 border-t border-amber-300 flex items-center justify-between text-[11px] text-amber-900 animate-pulse">
+            <div className="flex items-center gap-1.5 font-bold">
+              <span className="w-2 h-2 rounded-full bg-amber-600 animate-ping shrink-0" />
+              <span>{isRtl ? '🎙️ مسلسل سن رہا ہے (ur-PK)... وقفے پر مائیک بند نہیں ہوگا۔' : '🎙️ Continuous listening (ur-PK)... Speak freely with pauses.'}</span>
+            </div>
+            <button
+              type="button"
+              onClick={stopListening}
+              className="text-[10px] bg-amber-600 hover:bg-amber-700 text-white font-bold px-2 py-0.5 rounded cursor-pointer"
+            >
+              {isRtl ? 'بند کریں' : 'Stop'}
+            </button>
+          </div>
+        )}
 
         {/* Replaced Single Chat Bar: ＋ | Message Azad AI... | 🎙️ | ↑ */}
         <div 

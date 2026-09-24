@@ -8,31 +8,36 @@ import { ChatbotModal } from './components/ChatbotModal';
 import { SettingsModal } from './components/SettingsModal';
 import { PrivacyModal } from './components/PrivacyModal';
 import { AppGuideModal } from './components/AppGuideModal';
+import { CustomerAnalyticsModal } from './components/CustomerAnalyticsModal';
+import { BulkMessagingModal } from './components/BulkMessagingModal';
 import { RecentOrdersQuickView } from './components/RecentOrdersQuickView';
 import { CustomerSearchComponent } from './components/CustomerSearchComponent';
 import { SlimSummaryHeader } from './components/SlimSummaryHeader';
 import { CustomDrawerMenu } from './components/CustomDrawerMenu';
 import { SplashScreen } from './components/SplashScreen';
+import { PWAInstallButton } from './components/PWAInstallButton';
+import { OfflineIndicator } from './components/OfflineIndicator';
+import { AdMobBannerPlaceholder } from './components/AdMobBannerPlaceholder';
 import { compressImageForOcr } from './utils/imageCompressor';
 import { getStatusMeta, ORDER_STATUS_LIST, getLocalizedStatusLabel } from './utils/orderStatus';
+import { getAvatarColorByName, getCustomerInitial } from './utils/avatarColors';
+import { 
+  saveCustomersToOfflineDb, 
+  loadCustomersFromOfflineDb, 
+  deleteCustomerFromOfflineDb 
+} from './utils/offlineDb';
 import { 
   auth, 
   signInWithGoogle,
-  signInWithGoogleRedirect,
   checkRedirectAuthResult,
   signOutUser,
-  signInMasterCloudDirect,
-  signInWithMasterPhonePin,
-  getActiveLocalUser,
   saveCustomerToFirestore,
   deleteCustomerFromFirestore,
   subscribeToCustomerRecords,
   syncAllCustomersToFirestore,
-  testFirebaseConnection,
   saveUserProfileToFirestore,
   getUserProfileFromFirestore,
-  getAuthErrorMessage,
-  activeFirebaseConfig
+  getAuthErrorMessage
 } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { 
@@ -66,7 +71,11 @@ import {
   RefreshCw,
   Copy,
   Check,
-  Zap
+  Zap,
+  WifiOff,
+  UserCheck,
+  TrendingUp,
+  BarChart3
 } from 'lucide-react';
 import { isDeliveryToday, isDeliveryLate, getDeliveryStatus } from './utils/deliveryDate';
 
@@ -85,70 +94,13 @@ export default function AzadMasterFinalApp() {
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const searchContainerRef = useRef<HTMLDivElement>(null);
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<'all' | OrderStatus>('all');
   const [selectedDeliveryFilter, setSelectedDeliveryFilter] = useState<'all' | 'today' | 'late'>('all');
-  
-  // Search history state
-  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('azad_master_search_history');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    return [];
-  });
+  const [sortOption, setSortOption] = useState<'newest' | 'urgent' | 'alphabetical'>('newest');
 
   const handleSetSearch = (name: string) => {
     setSearchQuery(name);
   };
-
-  const commitSearchHistory = (term: string) => {
-    const clean = term.trim();
-    if (!clean) return;
-    setSearchHistory((prev) => {
-      const updated = [clean, ...prev.filter((item) => item.toLowerCase() !== clean.toLowerCase())].slice(0, 8);
-      try {
-        localStorage.setItem('azad_master_search_history', JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
-  };
-
-  const removeSearchHistoryItem = (itemToRemove: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    setSearchHistory((prev) => {
-      const updated = prev.filter((item) => item !== itemToRemove);
-      try {
-        localStorage.setItem('azad_master_search_history', JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
-  };
-
-  const clearAllSearchHistory = (e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    setSearchHistory([]);
-    try {
-      localStorage.removeItem('azad_master_search_history');
-    } catch {}
-  };
-
-  // Close search dropdown on clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
-        setIsSearchFocused(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
 
   useEffect(() => {
     (window as any).setSearch = (name: string) => {
@@ -167,6 +119,8 @@ export default function AzadMasterFinalApp() {
   
   const [showSideMenu, setShowSideMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showBulkMessaging, setShowBulkMessaging] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showAppGuide, setShowAppGuide] = useState(false);
   const [showChatbot, setShowChatbot] = useState(false);
@@ -176,13 +130,6 @@ export default function AzadMasterFinalApp() {
   const [masterName, setMasterName] = useState('');
   const [masterPhone, setMasterPhone] = useState('');
   const [masterPhoto, setMasterPhoto] = useState<string | null>(null);
-
-  // Login UI modes & inputs
-  const [loginTab, setLoginTab] = useState<'instant' | 'phone' | 'google'>('instant');
-  const [inputMasterName, setInputMasterName] = useState('');
-  const [inputPhone, setInputPhone] = useState('');
-  const [inputPin, setInputPin] = useState('');
-  const [phoneLoginError, setPhoneLoginError] = useState<string | null>(null);
 
   // Listen to Auth state & Cloud Sync
   useEffect(() => {
@@ -229,13 +176,13 @@ export default function AzadMasterFinalApp() {
         setMasterPhone(phone);
       }
 
-      // 2. Load cached customers for this specific user
+      // 2. Load cached customers for this specific user (LocalStorage + IndexedDB 100% offline)
       const localCacheKey = `azad_master_customers_${uid}`;
       const cached = localStorage.getItem(localCacheKey);
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed)) {
+          if (Array.isArray(parsed) && parsed.length > 0) {
             setCustomers(parsed);
             setCloudRecordCount(parsed.length);
           }
@@ -245,35 +192,54 @@ export default function AzadMasterFinalApp() {
         setCloudRecordCount(0);
       }
 
+      // Query IndexedDB for full offline mirror (including large slips and customer images)
+      loadCustomersFromOfflineDb(uid).then((offlineList) => {
+        if (offlineList && offlineList.length > 0) {
+          setCustomers((prev) => (prev.length === 0 ? offlineList : prev));
+          setCloudRecordCount((prev) => (prev === 0 ? offlineList.length : prev));
+        }
+      });
+
       // 3. Subscribe to real-time customer records for this user (where ownerId == uid)
       setCloudSyncStatus('syncing');
       if (unsubscribeFirestore) unsubscribeFirestore();
       unsubscribeFirestore = subscribeToCustomerRecords((cloudCustomers) => {
-        setCustomers(cloudCustomers);
-        setCloudRecordCount(cloudCustomers.length);
+        let mergedList = [...cloudCustomers];
+        let hasNewGuestData = false;
+
+        // Auto-merge offline guest records created without login
+        const guestKeys = ['azad_master_customers_guest_offline_user', 'azad_master_customers_offline'];
+        for (const gk of guestKeys) {
+          const guestStr = localStorage.getItem(gk);
+          if (guestStr) {
+            try {
+              const guestItems: Customer[] = JSON.parse(guestStr);
+              if (Array.isArray(guestItems) && guestItems.length > 0) {
+                for (const gItem of guestItems) {
+                  if (!mergedList.some(c => c.id === gItem.id)) {
+                    mergedList.push(gItem);
+                    hasNewGuestData = true;
+                  }
+                }
+                localStorage.removeItem(gk);
+              }
+            } catch {}
+          }
+        }
+
+        if (hasNewGuestData) {
+          console.log("Automatically syncing offline guest records to user's Google Cloud account...");
+          syncAllCustomersToFirestore(mergedList);
+        }
+
+        setCustomers(mergedList);
+        setCloudRecordCount(mergedList.length);
         setCloudSyncStatus('synced');
         setLastCloudSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-        try {
-          localStorage.setItem(localCacheKey, JSON.stringify(cloudCustomers));
-        } catch {}
+        // Mirror to both LocalStorage and IndexedDB for 100% offline access
+        saveCustomersToOfflineDb(mergedList, uid);
       });
     };
-
-    // Auto-restore active session if existing
-    const activeLocal = getActiveLocalUser();
-    if (activeLocal && activeLocal.uid) {
-      const mockUser = {
-        uid: activeLocal.uid,
-        displayName: activeLocal.name,
-        phoneNumber: activeLocal.phone || '',
-        email: activeLocal.email || null,
-        photoURL: activeLocal.photo || null
-      } as unknown as User;
-      setCurrentUser(mockUser);
-      setIsLoggedIn(true);
-      setIsLoadingAuth(false);
-      setupUserSession(mockUser);
-    }
 
     // Check if user returned from a redirect sign-in
     checkRedirectAuthResult()
@@ -300,21 +266,6 @@ export default function AzadMasterFinalApp() {
         setAuthError(null);
         setupUserSession(user);
       } else {
-        const local = getActiveLocalUser();
-        if (local && local.uid) {
-          const mockUser = {
-            uid: local.uid,
-            displayName: local.name,
-            phoneNumber: local.phone || '',
-            email: local.email || null,
-            photoURL: local.photo || null
-          } as unknown as User;
-          setCurrentUser(mockUser);
-          setIsLoggedIn(true);
-          setIsLoadingAuth(false);
-          setupUserSession(mockUser);
-          return;
-        }
         if (unsubscribeFirestore) {
           unsubscribeFirestore();
           unsubscribeFirestore = null;
@@ -335,6 +286,50 @@ export default function AzadMasterFinalApp() {
       if (unsubscribeFirestore) unsubscribeFirestore();
     };
   }, [isRtl]);
+
+  // Offline Syncing Enhancement: Auto-sync pending local records whenever device reconnects online
+  useEffect(() => {
+    const handleOnlineSync = async () => {
+      // Check user preference
+      let isAutoSyncEnabled = true;
+      try {
+        const stored = localStorage.getItem('azad_master_auto_offline_sync');
+        if (stored !== null) isAutoSyncEnabled = stored === 'true';
+      } catch {}
+
+      if (!isAutoSyncEnabled) return;
+
+      const effectiveUid = currentUser?.uid;
+      if (!effectiveUid) return;
+
+      console.log("🌐 Internet reconnected! Running automatic background cloud sync...");
+      setCloudSyncStatus('syncing');
+
+      try {
+        // Read latest offline records from IndexedDB/LocalStorage
+        const offlineRecords = await loadCustomersFromOfflineDb(effectiveUid);
+        const listToSync = offlineRecords && offlineRecords.length > 0 ? offlineRecords : customers;
+
+        if (listToSync.length > 0) {
+          const res = await syncAllCustomersToFirestore(listToSync);
+          if (res.success) {
+            setCloudRecordCount(res.count);
+            setCloudSyncStatus('synced');
+            setLastCloudSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          }
+        } else {
+          setCloudSyncStatus('synced');
+        }
+      } catch (e) {
+        console.warn("Background reconnect sync failed:", e);
+      }
+    };
+
+    window.addEventListener('online', handleOnlineSync);
+    return () => {
+      window.removeEventListener('online', handleOnlineSync);
+    };
+  }, [currentUser, customers]);
 
   // Dynamically resolve tailor's display name from Firebase Auth (currentUser.displayName),
   // custom masterName, or default to 'ماسٹر صاحب' (never a static hardcoded name)
@@ -432,7 +427,7 @@ export default function AzadMasterFinalApp() {
     }
   };
 
-  // Real Google Sign-in Handler (Popup with auto-fallback to Redirect if popup is blocked)
+  // Primary Google Login Handler (Opens Google Sign-in)
   const handleGoogleLogin = async () => {
     setAuthError(null);
     setIsLoadingAuth(true);
@@ -441,100 +436,7 @@ export default function AzadMasterFinalApp() {
       // onAuthStateChanged will handle setting the state and user
     } catch (err: any) {
       console.error("Google Sign-In Error:", err);
-      // If popup was blocked or failed due to browser restrictions, fallback automatically to redirect
-      if (
-        err?.code === 'auth/popup-blocked' ||
-        err?.code === 'auth/cancelled-popup-request'
-      ) {
-        try {
-          console.log("Popup blocked by browser. Automatically trying Google Redirect...");
-          await signInWithGoogleRedirect();
-          return;
-        } catch (redirectErr: any) {
-          console.error("Google Redirect Fallback Error:", redirectErr);
-          setAuthError(getAuthErrorMessage(redirectErr, isRtl));
-        }
-      } else {
-        setAuthError(getAuthErrorMessage(err, isRtl));
-      }
-      setIsLoadingAuth(false);
-    }
-  };
-
-  // Dedicated Direct Google Redirect Sign-in Handler
-  const handleGoogleRedirectLogin = async () => {
-    setAuthError(null);
-    setIsLoadingAuth(true);
-    try {
-      await signInWithGoogleRedirect();
-    } catch (err: any) {
-      console.error("Google Redirect Error:", err);
       setAuthError(getAuthErrorMessage(err, isRtl));
-      setIsLoadingAuth(false);
-    }
-  };
-
-  // Instant Master Cloud Login (Bypasses unauthorized-domain restriction on Starter tier)
-  const handleInstantLogin = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setAuthError(null);
-    setPhoneLoginError(null);
-    setIsLoadingAuth(true);
-    try {
-      const res = await signInMasterCloudDirect(inputMasterName, inputPhone);
-      const sessionUser = {
-        uid: res.uid,
-        displayName: res.name,
-        phoneNumber: res.phone || '',
-        email: res.email || null,
-        photoURL: res.photo || null
-      } as unknown as User;
-      setCurrentUser(sessionUser);
-      setIsLoggedIn(true);
-      setMasterName(res.name);
-      if (res.phone) setMasterPhone(res.phone);
-    } catch (err: any) {
-      console.error("Instant Login Error:", err);
-      setAuthError(getAuthErrorMessage(err, isRtl));
-    } finally {
-      setIsLoadingAuth(false);
-    }
-  };
-
-  // Phone + 4-digit PIN Login
-  const handlePhonePinSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPhoneLoginError(null);
-    setAuthError(null);
-    if (!inputPhone || inputPhone.trim().length < 4) {
-      setPhoneLoginError(isRtl ? 'براہ کرم درست موبائل نمبر درج کریں۔' : 'Please enter a valid phone number.');
-      return;
-    }
-    if (!inputPin || inputPin.trim().length < 4) {
-      setPhoneLoginError(isRtl ? 'براہ کرم کم از کم 4 ہندسوں کا پن کوڈ درج کریں۔' : 'Please enter at least 4-digit PIN.');
-      return;
-    }
-    setIsLoadingAuth(true);
-    try {
-      const res = await signInWithMasterPhonePin(inputPhone, inputPin, inputMasterName);
-      if (res.success && res.session) {
-        const sessionUser = {
-          uid: res.session.uid,
-          displayName: res.session.name,
-          phoneNumber: res.session.phone || '',
-          email: res.session.email || null,
-          photoURL: res.session.photo || null
-        } as unknown as User;
-        setCurrentUser(sessionUser);
-        setIsLoggedIn(true);
-        setMasterName(res.session.name);
-        if (res.session.phone) setMasterPhone(res.session.phone);
-      } else {
-        setPhoneLoginError(res.error || (isRtl ? 'لاگ ان میں خرابی پیش آئی۔' : 'Login failed.'));
-      }
-    } catch (err: any) {
-      setPhoneLoginError(isRtl ? 'لاگ ان نہیں ہو سکا۔ براہ کرم دوبارہ کوشش کریں۔' : 'Could not log in. Please retry.');
-    } finally {
       setIsLoadingAuth(false);
     }
   };
@@ -553,7 +455,6 @@ export default function AzadMasterFinalApp() {
     setMasterPhone('');
     setShowSideMenu(false);
     setAuthError(null);
-    setPhoneLoginError(null);
   };
 
   const handleSaveCustomer = (customerData: Partial<Customer>) => {
@@ -589,9 +490,7 @@ export default function AzadMasterFinalApp() {
     }
 
     setCustomers(updated);
-    try {
-      localStorage.setItem(`azad_master_customers_${effectiveUid}`, JSON.stringify(updated));
-    } catch {}
+    saveCustomersToOfflineDb(updated, effectiveUid);
 
     setCloudSyncStatus('syncing');
     saveCustomerToFirestore(savedObj).then((res) => {
@@ -638,9 +537,7 @@ export default function AzadMasterFinalApp() {
       return c;
     });
     setCustomers(updated);
-    try {
-      localStorage.setItem(`azad_master_customers_${effectiveUid}`, JSON.stringify(updated));
-    } catch {}
+    saveCustomersToOfflineDb(updated, effectiveUid);
     if (activeSlip && activeSlip.id === id) {
       setActiveSlip({ ...activeSlip, status });
     }
@@ -654,9 +551,7 @@ export default function AzadMasterFinalApp() {
     if (window.confirm(confirmMsg)) {
       const filtered = customers.filter((item) => item.id !== id);
       setCustomers(filtered);
-      try {
-        localStorage.setItem(`azad_master_customers_${effectiveUid}`, JSON.stringify(filtered));
-      } catch {}
+      deleteCustomerFromOfflineDb(id, effectiveUid);
       setCloudSyncStatus('syncing');
       deleteCustomerFromFirestore(id).then((res) => {
         if (res.success) {
@@ -740,34 +635,56 @@ export default function AzadMasterFinalApp() {
     setShowAddModal(true);
   };
 
-  const todayCount = customers.filter(c => isDeliveryToday(c.deliveryDate, c.status)).length;
-  const lateCount = customers.filter(c => isDeliveryLate(c.deliveryDate, c.status)).length;
+  const todayCount = useMemo(() => customers.filter(c => isDeliveryToday(c.deliveryDate, c.status)).length, [customers]);
+  const lateCount = useMemo(() => customers.filter(c => isDeliveryLate(c.deliveryDate, c.status)).length, [customers]);
 
-  const statusCounts = {
+  const statusCounts = useMemo(() => ({
     all: customers.length,
     pending: customers.filter(c => (c.status || 'pending') === 'pending').length,
     cutting: customers.filter(c => c.status === 'cutting').length,
     stitching: customers.filter(c => c.status === 'stitching').length,
     ready: customers.filter(c => c.status === 'ready').length,
     delivered: customers.filter(c => c.status === 'delivered').length,
-  };
+  }), [customers]);
 
-  const filteredList = customers.filter((item) => {
-    const matchesSearch = 
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      item.phone.includes(searchQuery) ||
-      item.details.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const itemStatus = item.status || 'pending';
-    const matchesStatus = selectedStatusFilter === 'all' || itemStatus === selectedStatusFilter;
+  const filteredList = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    const list = customers.filter((item) => {
+      const idStr = item.id ? String(item.id) : '';
+      const matchesSearch = 
+        !q ||
+        item.name.toLowerCase().includes(q) || 
+        item.phone.includes(q) ||
+        idStr.includes(q) ||
+        (item.details && item.details.toLowerCase().includes(q));
+      
+      const itemStatus = item.status || 'pending';
+      const matchesStatus = selectedStatusFilter === 'all' || itemStatus === selectedStatusFilter;
 
-    const matchesDelivery = 
-      selectedDeliveryFilter === 'all' ||
-      (selectedDeliveryFilter === 'today' && isDeliveryToday(item.deliveryDate, item.status)) ||
-      (selectedDeliveryFilter === 'late' && isDeliveryLate(item.deliveryDate, item.status));
+      const matchesDelivery = 
+        selectedDeliveryFilter === 'all' ||
+        (selectedDeliveryFilter === 'today' && isDeliveryToday(item.deliveryDate, item.status)) ||
+        (selectedDeliveryFilter === 'late' && isDeliveryLate(item.deliveryDate, item.status));
 
-    return matchesSearch && matchesStatus && matchesDelivery;
-  });
+      return matchesSearch && matchesStatus && matchesDelivery;
+    });
+
+    return [...list].sort((a, b) => {
+      if (sortOption === 'urgent') {
+        if (!a.deliveryDate && !b.deliveryDate) return (b.id || 0) - (a.id || 0);
+        if (!a.deliveryDate) return 1;
+        if (!b.deliveryDate) return -1;
+        return a.deliveryDate.localeCompare(b.deliveryDate);
+      } else if (sortOption === 'alphabetical') {
+        const nameA = (a.name || '').trim();
+        const nameB = (b.name || '').trim();
+        return nameA.localeCompare(nameB, 'ur', { sensitivity: 'base' });
+      } else {
+        // 'newest' (default)
+        return (b.id || 0) - (a.id || 0);
+      }
+    });
+  }, [customers, searchQuery, selectedStatusFilter, selectedDeliveryFilter, sortOption]);
 
   // 1. Production-Ready Flexible Multi-Method Login View
   if (!isLoggedIn) {
@@ -815,340 +732,62 @@ export default function AzadMasterFinalApp() {
             </p>
           </div>
 
-          {/* High Visibility Error Message Display with Recovery Actions */}
+          {/* High Visibility Error Alert Banner (if any) */}
           {authError && (
             <div 
               id="auth-error-alert-banner"
               role="alert"
-              className="mb-4 p-3.5 bg-rose-50 border-2 border-rose-500 rounded-xl text-rose-900 text-xs flex flex-col gap-2.5 text-left rtl:text-right animate-in fade-in shadow-md"
+              className="mb-4 p-3.5 bg-rose-50 border border-rose-300 rounded-xl text-rose-900 text-xs flex items-start justify-between gap-2 text-left rtl:text-right animate-in fade-in shadow-xs"
             >
               <div className="flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600 animate-pulse" />
-                <div className="flex-1 space-y-0.5">
-                  <div className="font-extrabold text-rose-950 text-xs">
-                    {isRtl ? '⚠️ لاگ ان کا الرٹ' : '⚠️ Sign-in Notice'}
-                  </div>
-                  <p className="font-semibold text-rose-900 leading-relaxed text-[11.5px] whitespace-pre-wrap break-words">
-                    {authError}
-                  </p>
-                </div>
+                <p className="font-semibold text-rose-900 leading-relaxed text-[11.5px] whitespace-pre-wrap break-words">
+                  {authError}
+                </p>
               </div>
-              
-              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-rose-200">
-                <button
-                  type="button"
-                  id="error-instant-login-btn"
-                  onClick={() => handleInstantLogin()}
-                  disabled={isLoadingAuth}
-                  className="px-3 py-1.5 bg-[#075e54] hover:bg-[#064e46] text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-sm cursor-pointer"
-                >
-                  <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
-                  <span>{isRtl ? '⚡ فوری کلاؤڈ داخلہ (بغیر ڈومین کے)' : '⚡ Instant Cloud Login'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAuthError(null)}
-                  className="px-2 py-1 text-slate-500 hover:text-slate-800 text-xs cursor-pointer hover:underline"
-                >
-                  {isRtl ? 'صاف کریں' : 'Dismiss'}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setAuthError(null)}
+                className="px-2 py-1 text-slate-500 hover:text-slate-800 text-xs cursor-pointer hover:underline shrink-0"
+              >
+                {isRtl ? 'صاف کریں' : 'Dismiss'}
+              </button>
             </div>
           )}
 
-          {/* Login Mode Tabs */}
-          <div className="flex items-center p-1 bg-slate-100 rounded-xl mb-4 border border-slate-200 text-xs font-bold">
-            <button
-              type="button"
-              id="tab-instant-login"
-              onClick={() => { setLoginTab('instant'); setAuthError(null); setPhoneLoginError(null); }}
-              className={`flex-1 py-2 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                loginTab === 'instant'
-                  ? 'bg-white text-[#075e54] shadow-xs font-black'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
+          {/* Single Prominent, Beautiful Google Sign-In Button */}
+          <div className="my-5 space-y-3">
+            <button 
+              type="button" 
+              id="google-signin-btn"
+              onClick={handleGoogleLogin}
+              disabled={isLoadingAuth}
+              className="w-full bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-800 font-extrabold py-4 px-5 rounded-2xl border-2 border-slate-300 hover:border-[#4285F4] shadow-md hover:shadow-xl transition-all duration-200 text-sm sm:text-base flex items-center justify-center gap-3.5 cursor-pointer select-none ring-4 ring-transparent hover:ring-blue-100"
             >
-              <Zap className={`w-3.5 h-3.5 ${loginTab === 'instant' ? 'text-amber-500 fill-amber-500' : 'text-slate-400'}`} />
-              <span>{isRtl ? '⚡ فوری داخلہ' : '⚡ Instant Access'}</span>
-            </button>
-            <button
-              type="button"
-              id="tab-phone-login"
-              onClick={() => { setLoginTab('phone'); setAuthError(null); setPhoneLoginError(null); }}
-              className={`flex-1 py-2 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                loginTab === 'phone'
-                  ? 'bg-white text-[#075e54] shadow-xs font-black'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Phone className="w-3.5 h-3.5 text-[#25d366]" />
-              <span>{isRtl ? 'موبائل اور پن' : 'Phone & PIN'}</span>
-            </button>
-            <button
-              type="button"
-              id="tab-google-login"
-              onClick={() => { setLoginTab('google'); setAuthError(null); setPhoneLoginError(null); }}
-              className={`flex-1 py-2 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                loginTab === 'google'
-                  ? 'bg-white text-[#075e54] shadow-xs font-black'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-              </svg>
-              <span>{isRtl ? 'گوگل' : 'Google'}</span>
-            </button>
-          </div>
-
-          {/* TAB 1: INSTANT MASTER CLOUD LOGIN (Bypasses Domain Restrictions 100%) */}
-          {loginTab === 'instant' && (
-            <form onSubmit={handleInstantLogin} className="space-y-3.5">
-              <div className="p-3 bg-emerald-50/90 border border-emerald-300/80 rounded-xl text-xs space-y-1.5">
-                <div className="flex items-center gap-2 text-emerald-900 font-bold">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{isRtl ? 'ڈومین کی پابندی کے بغیر براہ راست فائر بیس کلاؤڈ' : 'Direct Cloud Firestore Access (No Domain Whitelist Needed)'}</span>
-                </div>
-                <p className="text-[11px] text-emerald-800 leading-relaxed">
-                  {isRtl 
-                    ? 'ورسل (Vercel) یا کسی بھی ویب براؤزر پر بغیر کسی رکاوٹ کے فوری لاگ ان کریں اور تمام کسٹمرز کا ناپ کلاؤڈ پر محفوظ رکھیں۔' 
-                    : 'Instant 1-click cloud access for Vercel and all browsers. Data syncs directly with Firestore.'}
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {isRtl ? 'ماسٹر صاحب کا نام / دکان کا نام (اختیاری):' : 'Master / Shop Name (Optional):'}
-                </label>
-                <input
-                  type="text"
-                  id="instant-login-master-name"
-                  value={inputMasterName}
-                  onChange={(e) => setInputMasterName(e.target.value)}
-                  placeholder={isRtl ? 'مثلاً: آزاد ماسٹر / استاد صاحب' : 'e.g. Master Tailor'}
-                  className="w-full bg-slate-50 border border-slate-300 focus:border-[#075e54] focus:bg-white text-slate-900 rounded-xl px-3.5 py-2.5 text-xs outline-none transition-all font-medium"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {isRtl ? 'موبائل نمبر (اختیاری):' : 'Mobile Number (Optional):'}
-                </label>
-                <input
-                  type="tel"
-                  id="instant-login-phone"
-                  value={inputPhone}
-                  onChange={(e) => setInputPhone(e.target.value)}
-                  placeholder="03001234567"
-                  className="w-full bg-slate-50 border border-slate-300 focus:border-[#075e54] focus:bg-white text-slate-900 rounded-xl px-3.5 py-2.5 text-xs outline-none transition-all font-mono"
-                />
-              </div>
-
-              <button
-                type="submit"
-                id="instant-submit-btn"
-                disabled={isLoadingAuth}
-                className="w-full bg-gradient-to-r from-[#075e54] via-[#064e46] to-[#128c7e] hover:from-[#064e46] hover:to-[#075e54] active:scale-[0.99] text-white font-extrabold py-3.5 px-4 rounded-xl shadow-md hover:shadow-lg transition-all text-xs sm:text-sm flex items-center justify-center gap-2.5 cursor-pointer select-none"
-              >
-                {isLoadingAuth ? (
-                  <>
-                    <RotateCw className="w-4 h-4 animate-spin text-amber-300" />
-                    <span>{isRtl ? 'کلاؤڈ رجسٹر کھولا جا رہا ہے...' : 'Opening Cloud Register...'}</span>
-                  </>
-                ) : (
-                  <>
-                    <Zap className="w-4 h-4 text-amber-300 fill-amber-300 shrink-0" />
-                    <span>{isRtl ? '⚡ کلاؤڈ رجسٹر میں داخل ہوں' : '⚡ Open Cloud Register'}</span>
-                  </>
-                )}
-              </button>
-            </form>
-          )}
-
-          {/* TAB 2: PHONE + PIN LOGIN */}
-          {loginTab === 'phone' && (
-            <form onSubmit={handlePhonePinSubmit} className="space-y-3.5">
-              {phoneLoginError && (
-                <div className="p-2.5 bg-rose-50 border border-rose-300 rounded-lg text-rose-800 text-xs flex items-center gap-1.5 font-bold">
-                  <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                  <span>{phoneLoginError}</span>
-                </div>
+              {isLoadingAuth ? (
+                <>
+                  <RotateCw className="w-5 h-5 animate-spin text-[#075e54]" />
+                  <span className="text-slate-700">
+                    {t.signingIn || (isRtl ? 'گوگل سے منسلک ہو رہا ہے...' : 'Signing in with Google...')}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-6 h-6 shrink-0 filter drop-shadow-xs" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                  </svg>
+                  <span className="text-base font-black tracking-tight text-slate-800">
+                    Sign in with Google
+                  </span>
+                </>
               )}
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {isRtl ? 'موبائل نمبر:' : 'Mobile Number:'}
-                </label>
-                <input
-                  type="tel"
-                  id="phone-login-input"
-                  required
-                  value={inputPhone}
-                  onChange={(e) => setInputPhone(e.target.value)}
-                  placeholder="03001234567"
-                  className="w-full bg-slate-50 border border-slate-300 focus:border-[#075e54] focus:bg-white text-slate-900 rounded-xl px-3.5 py-2.5 text-xs outline-none transition-all font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {isRtl ? '4 ہندسوں کا پن کوڈ (PIN):' : '4-Digit PIN Code:'}
-                </label>
-                <input
-                  type="password"
-                  id="pin-login-input"
-                  required
-                  maxLength={6}
-                  value={inputPin}
-                  onChange={(e) => setInputPin(e.target.value)}
-                  placeholder="••••"
-                  className="w-full bg-slate-50 border border-slate-300 focus:border-[#075e54] focus:bg-white text-slate-900 rounded-xl px-3.5 py-2.5 text-sm tracking-widest outline-none transition-all font-mono text-center"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {isRtl ? 'ماسٹر کا نام (اختیاری):' : 'Master Name (Optional):'}
-                </label>
-                <input
-                  type="text"
-                  id="phone-login-master-name"
-                  value={inputMasterName}
-                  onChange={(e) => setInputMasterName(e.target.value)}
-                  placeholder={isRtl ? 'ماسٹر صاحب' : 'Master Tailor'}
-                  className="w-full bg-slate-50 border border-slate-300 focus:border-[#075e54] focus:bg-white text-slate-900 rounded-xl px-3.5 py-2.5 text-xs outline-none transition-all font-medium"
-                />
-              </div>
-
-              <button
-                type="submit"
-                id="phone-pin-submit-btn"
-                disabled={isLoadingAuth}
-                className="w-full bg-[#075e54] hover:bg-[#064e46] active:scale-[0.99] text-white font-extrabold py-3.5 px-4 rounded-xl shadow-md hover:shadow-lg transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer select-none"
-              >
-                {isLoadingAuth ? (
-                  <>
-                    <RotateCw className="w-4 h-4 animate-spin text-amber-300" />
-                    <span>{isRtl ? 'لاگ ان ہو رہا ہے...' : 'Signing in...'}</span>
-                  </>
-                ) : (
-                  <>
-                    <LogIn className="w-4 h-4 text-amber-300 shrink-0" />
-                    <span>{isRtl ? 'فون اور پن سے لاگ ان کریں' : 'Log In with Phone & PIN'}</span>
-                  </>
-                )}
-              </button>
-            </form>
-          )}
-
-          {/* TAB 3: GOOGLE AUTH */}
-          {loginTab === 'google' && (
-            <div className="space-y-3.5">
-              {/* Current Domain & Firebase Project Display */}
-              <div 
-                id="firebase-current-domain-box"
-                className="p-3 bg-amber-50/90 border border-amber-300 rounded-xl text-xs flex flex-col gap-2 text-left rtl:text-right shadow-2xs"
-              >
-                <div className="flex items-center justify-between gap-1 text-[11px] text-amber-950 font-bold">
-                  <span>
-                    {isRtl 
-                      ? 'موجودہ ویب سائٹ ڈومین (Authorized Domain):' 
-                      : 'Current Website Domain (to Authorize):'}
-                  </span>
-                  <button
-                    type="button"
-                    id="copy-domain-btn"
-                    onClick={() => {
-                      if (typeof window !== 'undefined' && navigator.clipboard) {
-                        navigator.clipboard.writeText(window.location.hostname);
-                        setCopiedDomain(true);
-                        setTimeout(() => setCopiedDomain(false), 2500);
-                      }
-                    }}
-                    className="inline-flex items-center gap-1 text-[10.5px] bg-white hover:bg-amber-100 active:bg-amber-200 text-amber-900 border border-amber-300 font-bold px-2 py-0.5 rounded-md transition-all active:scale-95 cursor-pointer shadow-2xs"
-                    title="Copy current domain to clipboard"
-                  >
-                    {copiedDomain ? (
-                      <>
-                        <Check className="w-3 h-3 text-emerald-600" />
-                        <span className="text-emerald-700">{isRtl ? 'کاپی ہو گیا!' : 'Copied!'}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3 h-3 text-amber-800" />
-                        <span>{isRtl ? 'ڈومین کاپی کریں' : 'Copy Domain'}</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-                <div className="bg-white px-2.5 py-1.5 rounded-lg border border-amber-200 font-mono text-[12px] text-slate-900 select-all font-bold break-all flex items-center justify-between">
-                  <span className="text-[#075e54] select-all tracking-wide">
-                    {typeof window !== 'undefined' ? window.location.hostname : ''}
-                  </span>
-                </div>
-
-                <p className="text-[10.5px] text-amber-900 leading-normal">
-                  {isRtl 
-                    ? `اگر فائر بیس پراجیکٹ "${activeFirebaseConfig.projectId}" میں ورسل ڈومین لاک ہے تو اوپر والا '⚡ فوری داخلہ' ٹیب استعمال کریں جس میں ڈومین کی کوئی رکاوٹ نہیں ہوتی۔` 
-                    : `If domain whitelisting is locked in Firebase Starter tier, switch to the '⚡ Instant Access' tab above for unrestricted login.`}
-                </p>
-              </div>
-
-              {/* Primary: Google Sign-in */}
-              <button 
-                type="button" 
-                id="google-signin-btn"
-                onClick={handleGoogleLogin}
-                disabled={isLoadingAuth}
-                className="w-full bg-white hover:bg-slate-50 active:scale-[0.99] text-slate-800 font-bold py-3.5 px-4 rounded-xl border border-slate-300 shadow-sm hover:shadow-md transition-all text-xs sm:text-sm flex items-center justify-center gap-3 cursor-pointer select-none"
-              >
-                {isLoadingAuth ? (
-                  <>
-                    <RotateCw className="w-4 h-4 animate-spin text-[#075e54]" />
-                    <span>{t.signingIn || (isRtl ? 'لاگ ان ہو رہا ہے...' : 'Signing in...')}</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
-                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-                    </svg>
-                    <span className="text-sm font-black">{t.signInWithGoogle || (isRtl ? 'Google سے لاگ ان کریں' : 'Sign In with Google')}</span>
-                  </>
-                )}
-              </button>
-
-              {/* Secondary: Google Redirect Button */}
-              <button 
-                type="button" 
-                id="google-redirect-btn"
-                onClick={handleGoogleRedirectLogin}
-                disabled={isLoadingAuth}
-                className="w-full bg-[#f0faf4] hover:bg-[#e1f5ec] active:scale-[0.99] text-[#075e54] font-bold py-2.5 px-4 rounded-xl border border-[#128c7e]/30 shadow-2xs hover:shadow-xs transition-all text-xs flex items-center justify-center gap-2 cursor-pointer select-none"
-              >
-                <LogIn className="w-3.5 h-3.5 text-[#25d366]" />
-                <span>{isRtl ? 'Google ری ڈائریکٹ لاگ ان (Redirect Mode)' : 'Sign In with Google (Redirect Mode)'}</span>
-              </button>
-            </div>
-          )}
-
-          {/* New Window Launcher for iFrame / Sandbox */}
-          <div className="mt-3.5 text-center">
-            <a 
-              href={window.location.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              id="open-new-window-link"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#075e54] hover:text-[#128c7e] hover:underline bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              <ExternalLink className="w-3.5 h-3.5 text-[#25d366]" />
-              <span>{isRtl ? 'براہ راست نئی ونڈو میں کھولیں' : 'Open directly in New Window'}</span>
-            </a>
+            </button>
+            <p className="text-center text-xs text-slate-500 font-medium">
+              {isRtl ? 'جی میل اکاؤنٹ سے فوری لاگ ان کریں اور رجسٹر کھولیں' : 'Click to sign in with your Gmail account'}
+            </p>
           </div>
 
           {/* Footer Language Selector */}
@@ -1221,29 +860,62 @@ export default function AzadMasterFinalApp() {
               </svg>
             </button>
             <div className="w-7 h-7 rounded-full overflow-hidden bg-white/10 border border-amber-300/40 flex items-center justify-center shrink-0 shadow-xs">
-              {masterPhoto ? (
+              {masterPhoto && masterPhoto.trim() !== '' ? (
                 <img src={masterPhoto} alt="Tailor" className="w-full h-full object-cover" />
               ) : (
                 <img src="/azad-master-logo.svg" alt="Azad Master Logo" className="w-full h-full object-contain" />
               )}
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="font-black text-base sm:text-lg tracking-wider text-white m-0 select-none drop-shadow-xs leading-none">
+              <span className="font-black text-sm sm:text-base tracking-wider text-white m-0 select-none drop-shadow-xs leading-none">
                 AZAD MASTER
               </span>
-              <span 
+              <div 
                 id="header-tailor-greeting"
-                className="text-[10px] sm:text-[11px] font-medium text-[#dcf8c6] truncate max-w-[130px] sm:max-w-[200px] leading-tight mt-0.5 flex items-center gap-1"
-                title={effectiveTailorName}
+                className="text-[10px] sm:text-[11px] font-medium text-[#dcf8c6] truncate max-w-[150px] sm:max-w-[260px] leading-tight mt-0.5 flex items-center gap-1"
+                title={`${effectiveTailorName} (${currentUser?.email || ''})`}
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-[#25d366] shrink-0" />
-                <span className="truncate">{effectiveTailorName}</span>
-              </span>
+                <span className="w-1.5 h-1.5 rounded-full bg-[#25d366] shrink-0 animate-pulse" />
+                <span className="font-bold text-white truncate">{effectiveTailorName}</span>
+                {currentUser?.email && (
+                  <span className="text-[9.5px] sm:text-[10px] text-emerald-200/80 font-mono truncate hidden xs:inline" dir="ltr">
+                    • {currentUser.email}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Right Side: Quick AI Chatbot Button & CustomDrawerMenu */}
+          {/* Right Side: Quick Analytics & Bulk Messaging & AI Chatbot & PWA Install Button & CustomDrawerMenu */}
           <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              id="header-bulk-msg-btn"
+              type="button"
+              onClick={() => setShowBulkMessaging(true)}
+              className="px-2.5 py-1 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 border border-white/25 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              title={isRtl ? 'بلک واٹس ایپ و ایس ایم ایس' : 'Bulk WhatsApp / SMS'}
+            >
+              <MessageCircle className="w-3.5 h-3.5 text-[#25d366] fill-[#25d366]" />
+              <span className="hidden md:inline text-[11px] font-semibold text-[#dcf8c6]">
+                {isRtl ? 'بلک میسج' : 'Bulk Msg'}
+              </span>
+            </button>
+
+            <button
+              id="header-analytics-btn"
+              type="button"
+              onClick={() => setShowAnalytics(true)}
+              className="px-2.5 py-1 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 border border-white/25 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              title={isRtl ? 'دکان کی بزنس رپورٹ' : 'Business Analytics'}
+            >
+              <TrendingUp className="w-3.5 h-3.5 text-amber-300" />
+              <span className="hidden sm:inline text-[11px] font-semibold text-[#dcf8c6]">
+                {isRtl ? 'رپورٹ' : 'Analytics'}
+              </span>
+            </button>
+
+            <PWAInstallButton isRtl={isRtl} variant="header" />
+
             <button
               id="header-ai-assistant-btn"
               type="button"
@@ -1265,6 +937,10 @@ export default function AzadMasterFinalApp() {
             onNavigate={(route) => {
               if (route === 'Profile') {
                 setShowSettings(true);
+              } else if (route === 'Analytics') {
+                setShowAnalytics(true);
+              } else if (route === 'BulkMessaging') {
+                setShowBulkMessaging(true);
               } else if (route === 'Backup') {
                 handleManualCloudSync();
               } else if (route === 'Help') {
@@ -1276,6 +952,7 @@ export default function AzadMasterFinalApp() {
             onChangeLanguage={changeLanguage}
             masterName={effectiveTailorName}
             userPhone={masterPhone || currentUser?.phoneNumber || undefined}
+            userEmail={currentUser?.email || undefined}
             isRtl={isRtl}
           />
         </header>
@@ -1294,19 +971,7 @@ export default function AzadMasterFinalApp() {
               customers={customers}
               searchQuery={searchQuery}
               onSearchChange={(text) => setSearchQuery(text)}
-              onSearchSubmit={(q) => commitSearchHistory(q)}
-              onSelectCustomer={(cust) => {
-                commitSearchHistory(cust.name || cust.phone);
-                setActiveSlip(cust);
-              }}
-              onAddNewCustomer={(_q) => {
-                setEditingCustomer(null);
-                setShowAddModal(true);
-              }}
-              searchHistory={searchHistory}
-              onClearHistory={clearAllSearchHistory}
-              onRemoveHistoryItem={removeSearchHistoryItem}
-              showSearchButton={true}
+              matchCount={searchQuery.trim().length > 0 ? filteredList.length : undefined}
               placeholder={t.searchPlaceholder}
               isRtl={isRtl}
               translations={t}
@@ -1333,14 +998,31 @@ export default function AzadMasterFinalApp() {
 
             {/* Order Tracking & Status Filter Chips */}
             <div id="order-tracking-filters" className="space-y-1 pt-0.5">
-              <div className="flex items-center justify-between text-[11px] font-semibold text-[#54656f] px-0.5">
-                <span className="flex items-center gap-1 font-bold text-slate-700">
-                  <span className="text-[#075e54]">⏱</span>
-                  <span>{t.orderStatusFilters}</span>
-                </span>
-                <span className="text-[10px] text-[#075e54] font-bold bg-[#e7f7ef] border border-[#128c7e]/25 px-1.5 py-0.5 rounded">
-                  {t.showing}: {filteredList.length}
-                </span>
+              <div className="flex items-center justify-between gap-1 text-[11px] font-semibold text-[#54656f] px-0.5">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="flex items-center gap-1 font-bold text-slate-700 shrink-0">
+                    <span className="text-[#075e54]">⏱</span>
+                    <span>{t.orderStatusFilters}</span>
+                  </span>
+                  <span className="text-[10px] text-[#075e54] font-bold bg-[#e7f7ef] border border-[#128c7e]/25 px-1.5 py-0.5 rounded shrink-0">
+                    {t.showing}: {filteredList.length}
+                  </span>
+                </div>
+
+                {/* Mobile-First Clean Sort Dropdown Selector */}
+                <div className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200/80 border border-slate-300/80 rounded-lg px-2 py-0.5 transition-colors shrink-0">
+                  <span className="text-[#075e54] font-extrabold text-[11px] select-none">⇅</span>
+                  <select
+                    id="order-sort-select"
+                    value={sortOption}
+                    onChange={(e) => setSortOption(e.target.value as 'newest' | 'urgent' | 'alphabetical')}
+                    className="bg-transparent text-[11px] text-slate-800 font-bold outline-none cursor-pointer"
+                  >
+                    <option value="newest">{isRtl ? 'ترتیب: تازہ ترین' : 'Sort: Newest'}</option>
+                    <option value="urgent">{isRtl ? 'ترتیب: ارجنٹ ڈیلیوری' : 'Sort: Urgent First'}</option>
+                    <option value="alphabetical">{isRtl ? 'ترتیب: نام (A تا Z)' : 'Sort: Name (A-Z)'}</option>
+                  </select>
+                </div>
               </div>
 
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar text-xs scroll-smooth">
@@ -1400,8 +1082,8 @@ export default function AzadMasterFinalApp() {
               </div>
             </div>
 
-            {/* Quick Action Buttons Row: Add Measurement & Paper Slip Camera Scan */}
-            <div className="grid grid-cols-2 gap-2 pt-0.5">
+            {/* Quick Action Buttons Row: Add Measurement, Paper Slip Camera Scan, and Bulk WhatsApp Messaging */}
+            <div className="grid grid-cols-3 gap-1.5 pt-0.5">
               <button
                 id="btn-quick-add-slip"
                 type="button"
@@ -1409,20 +1091,31 @@ export default function AzadMasterFinalApp() {
                   setEditingCustomer(null);
                   setShowAddModal(true);
                 }}
-                className="py-2 px-3 bg-[#075e54] hover:bg-[#054c44] active:scale-[0.98] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                className="py-2 px-2 bg-[#075e54] hover:bg-[#054c44] active:scale-[0.98] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1 shadow-xs transition-all cursor-pointer truncate"
               >
                 <span className="text-sm font-black">+</span>
-                <span>{t.addMeasurementBtn}</span>
+                <span className="truncate">{t.addMeasurementBtn}</span>
               </button>
 
               <button
                 id="btn-quick-camera-slip"
                 type="button"
                 onClick={() => setShowImageSourceModal(true)}
-                className="py-2 px-3 bg-[#128c7e] hover:bg-[#0f766a] active:scale-[0.98] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                className="py-2 px-2 bg-[#128c7e] hover:bg-[#0f766a] active:scale-[0.98] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1 shadow-xs transition-all cursor-pointer truncate"
               >
                 <span>📸</span>
-                <span>{t.photoOcrBtn}</span>
+                <span className="truncate">{t.photoOcrBtn}</span>
+              </button>
+
+              <button
+                id="btn-quick-bulk-msg"
+                type="button"
+                onClick={() => setShowBulkMessaging(true)}
+                className="py-2 px-2 bg-[#25d366] hover:bg-[#20ba59] active:scale-[0.98] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1 shadow-xs transition-all cursor-pointer truncate"
+                title={isRtl ? 'بلک واٹس ایپ و ایس ایم ایس میسج' : 'Bulk WhatsApp / SMS'}
+              >
+                <MessageCircle className="w-3.5 h-3.5 fill-white shrink-0" />
+                <span className="truncate">{isRtl ? 'بلک میسج' : 'Bulk Msg'}</span>
               </button>
             </div>
           </div>
@@ -1431,7 +1124,7 @@ export default function AzadMasterFinalApp() {
         {/* Scrollable Customer Slips List */}
         <main 
           id="scrollable-customers-container"
-          className="flex-1 overflow-y-auto p-2 sm:px-3 pb-24 bg-[#efeae2]/40"
+          className="flex-1 overflow-y-auto p-2 sm:px-3 pb-4 bg-[#efeae2]/40"
         >
           {/* Quick Orders Carousel / Delivery status */}
           <RecentOrdersQuickView
@@ -1503,6 +1196,8 @@ export default function AzadMasterFinalApp() {
                 const statusMeta = getStatusMeta(customer.status || 'pending');
                 const isDelivToday = isDeliveryToday(customer.deliveryDate, customer.status);
                 const isDelivLate = isDeliveryLate(customer.deliveryDate, customer.status);
+                const avatarTheme = getAvatarColorByName(customer.name, customer.avatarColor);
+                const initialChar = getCustomerInitial(customer.name);
 
                 return (
                   <div
@@ -1512,28 +1207,70 @@ export default function AzadMasterFinalApp() {
                     className="bg-white rounded-xl p-3 shadow-xs hover:shadow-md transition-all border border-slate-200/80 cursor-pointer active:scale-[0.99] relative overflow-hidden group"
                   >
                     {/* Status Top Indicator Bar */}
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-[#e7f7ef] text-[#075e54] flex items-center justify-center font-black text-sm shrink-0 border border-[#128c7e]/20">
-                          {customer.name ? customer.name.trim().charAt(0) : '👤'}
+                    <div className="flex items-center justify-between mb-2.5">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* Prominent Initial-Based Dynamic Avatar with High Contrast */}
+                        <div 
+                          className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl ${
+                            customer.imageUri 
+                              ? 'bg-slate-100 border border-slate-200' 
+                              : `${avatarTheme.gradientClass} ${avatarTheme.solidTextClass} border-2 border-white shadow-sm ring-2 ${avatarTheme.ringClass}`
+                          } flex items-center justify-center font-black text-base sm:text-lg shrink-0 shadow-md overflow-hidden transition-all duration-200 group-hover:scale-105 select-none`}
+                        >
+                          {customer.imageUri ? (
+                            <img src={customer.imageUri} alt={customer.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="leading-none drop-shadow-xs font-black tracking-tight">{initialChar}</span>
+                          )}
                         </div>
-                        <div>
-                          <h4 className="font-bold text-sm text-slate-800 group-hover:text-[#075e54] transition-colors">
+
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-sm sm:text-base text-slate-900 group-hover:text-[#075e54] transition-colors truncate">
                             {customer.name || t.unnamedCustomer}
                           </h4>
-                          <p className="text-[11px] text-[#54656f] font-mono flex items-center gap-1" dir="ltr">
-                            <Phone className="w-3 h-3 text-[#25d366]" />
-                            <span>{customer.phone || 'No phone'}</span>
-                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <p className="text-[11px] sm:text-xs text-[#54656f] font-mono flex items-center gap-1" dir="ltr">
+                              <Phone className="w-3 h-3 text-[#25d366]" />
+                              <span>{customer.phone || 'No phone'}</span>
+                            </p>
+                            {customer.phone && customer.phone.replace(/[^0-9]/g, '').length >= 7 && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const cleanPhone = customer.phone.replace(/[^0-9]/g, '');
+                                  const encodedMsg = encodeURIComponent(
+                                    `✨ *آزاد ماسٹر (AZAD MASTER)* ✨\nالسلام علیکم محترم *${customer.name || 'گاہک'}* صاحب، آپ کا ناپ ریکارڈ آزاد ماسٹر ٹیلرز کے پاس محفوظ ہے۔`
+                                  );
+                                  window.open(`https://wa.me/${cleanPhone}?text=${encodedMsg}`, '_blank');
+                                }}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#25D366]/15 hover:bg-[#25D366] text-[#075e54] hover:text-white text-[10px] font-bold transition-colors cursor-pointer"
+                                title="WhatsApp"
+                              >
+                                <MessageCircle className="w-2.5 h-2.5 fill-current" />
+                                <span>WhatsApp</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
 
                       {/* Status Chip */}
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${statusMeta.badgeClass}`}>
+                      <span className={`text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1 shrink-0 ${statusMeta.badgeClass}`}>
                         <span>{statusMeta.icon}</span>
                         <span>{getLocalizedStatusLabel(customer.status || 'pending', t)}</span>
                       </span>
                     </div>
+
+                    {/* Customer Note Tag Snippet */}
+                    {(customer.notes || customer.measurementsObj?.specialNotes) && (
+                      <div className="mb-2 px-2 py-1 bg-amber-50/80 border border-amber-200 rounded-lg flex items-center gap-1.5 text-[11px] text-amber-900 truncate">
+                        <span className="shrink-0 text-amber-600">📝</span>
+                        <span className="font-bold truncate">
+                          {customer.notes || customer.measurementsObj?.specialNotes}
+                        </span>
+                      </div>
+                    )}
 
                     {/* Delivery & Accounts Row */}
                     <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px]">
@@ -1571,7 +1308,7 @@ export default function AzadMasterFinalApp() {
         {/* Bottom Ergonomic Navigation Bar */}
         <div 
           id="bottom-nav-bar"
-          className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 h-16 px-3 sm:px-5 flex items-center justify-between shrink-0 z-40 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] select-none"
+          className="relative bg-white/95 backdrop-blur-md border-t border-slate-200 h-16 px-3 sm:px-5 flex items-center justify-between shrink-0 z-40 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] select-none"
         >
           {/* Home Button */}
           <button 
@@ -1615,6 +1352,9 @@ export default function AzadMasterFinalApp() {
             <span>{t.navAddMeasurement}</span>
           </button>
         </div>
+
+        {/* Google AdMob Reserved Banner Space (Temporarily Disabled - Set enabled={true} when active) */}
+        <AdMobBannerPlaceholder isRtl={isRtl} enabled={false} />
 
         {/* Image Source Selection Modal (Camera vs Gallery vs Manual) */}
         {showImageSourceModal && (
@@ -1760,6 +1500,31 @@ export default function AzadMasterFinalApp() {
             isRtl={isRtl}
           />
         )}
+
+        {/* Customer & Business Analytics Modal */}
+        <CustomerAnalyticsModal
+          visible={showAnalytics}
+          onClose={() => setShowAnalytics(false)}
+          customers={customers}
+          onOpenCustomerSlip={(cust) => setActiveSlip(cust)}
+          isRtl={isRtl}
+          currentLang={currentLang}
+          translations={t}
+        />
+
+        {/* Bulk WhatsApp / SMS Messaging Modal */}
+        <BulkMessagingModal
+          visible={showBulkMessaging}
+          onClose={() => setShowBulkMessaging(false)}
+          customers={customers}
+          masterName={effectiveTailorName}
+          isRtl={isRtl}
+          currentLang={currentLang}
+          translations={t}
+        />
+
+        {/* PWA 100% Offline Status Indicator */}
+        <OfflineIndicator />
 
         {/* Hidden File Inputs (Camera, Gallery, and Unified OCR) */}
         <input

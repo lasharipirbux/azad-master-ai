@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, memo } from 'react';
 import { Customer, OrderStatus } from '../types';
-import { ChevronDown, ChevronUp, Clock, Eye, Edit3, Calendar } from 'lucide-react';
+import { ChevronDown, ChevronUp, Clock, Eye, Edit3, Calendar, MessageCircle } from 'lucide-react';
 import { getStatusMeta, getLocalizedStatusLabel } from '../utils/orderStatus';
 import { isDeliveryToday, isDeliveryLate } from '../utils/deliveryDate';
+import { getAvatarColorByName, getCustomerInitial } from '../utils/avatarColors';
 import { TranslationDictionary } from '../data/translations';
 
 interface RecentOrdersQuickViewProps {
@@ -14,7 +15,7 @@ interface RecentOrdersQuickViewProps {
   translations?: TranslationDictionary;
 }
 
-export const RecentOrdersQuickView: React.FC<RecentOrdersQuickViewProps> = ({
+export const RecentOrdersQuickView: React.FC<RecentOrdersQuickViewProps> = memo(({
   customers,
   onOpenSlip,
   onSelectOrder,
@@ -32,8 +33,8 @@ export const RecentOrdersQuickView: React.FC<RecentOrdersQuickViewProps> = ({
     }
   };
 
-  // Take the most recent 6 orders
-  const recentOrders = customers.slice(0, 6);
+  // Take the most recent 6 orders (memoized)
+  const recentOrders = useMemo(() => customers.slice(0, 6), [customers]);
 
   if (customers.length === 0) {
     return null;
@@ -99,6 +100,8 @@ export const RecentOrdersQuickView: React.FC<RecentOrdersQuickViewProps> = ({
               const isLate = isDeliveryLate(order.deliveryDate, status);
               const isToday = isDeliveryToday(order.deliveryDate, status);
               const localizedStatus = getLocalizedStatusLabel(status, translations as unknown as Record<string, string>);
+              const avatarTheme = getAvatarColorByName(order.name, order.avatarColor);
+              const initialChar = getCustomerInitial(order.name);
 
               return (
                 <div
@@ -108,10 +111,25 @@ export const RecentOrdersQuickView: React.FC<RecentOrdersQuickViewProps> = ({
                 >
                   <div>
                     {/* Header: Name & Status */}
-                    <div className="flex items-start justify-between gap-1 mb-1">
-                      <h4 className="text-xs font-black text-slate-900 truncate" title={order.name}>
-                        {order.name || defaultCustomerName}
-                      </h4>
+                    <div className="flex items-start justify-between gap-1.5 mb-1.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div 
+                          className={`w-6 h-6 rounded-lg ${
+                            order.imageUri 
+                              ? 'bg-slate-100 border border-slate-200' 
+                              : `${avatarTheme.gradientClass} ${avatarTheme.solidTextClass} shadow-2xs`
+                          } flex items-center justify-center font-black text-[11px] shrink-0 overflow-hidden`}
+                        >
+                          {order.imageUri ? (
+                            <img src={order.imageUri} alt={order.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="select-none leading-none drop-shadow-xs">{initialChar}</span>
+                          )}
+                        </div>
+                        <h4 className="text-xs font-black text-slate-900 truncate" title={order.name}>
+                          {order.name || defaultCustomerName}
+                        </h4>
+                      </div>
                       <span className="text-[10px] shrink-0 px-1.5 py-0.2 rounded-full font-bold bg-slate-100 text-slate-700 border border-slate-200">
                         {statusMeta.icon} {localizedStatus}
                       </span>
@@ -145,25 +163,37 @@ export const RecentOrdersQuickView: React.FC<RecentOrdersQuickViewProps> = ({
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100">
+                  <div className="flex items-center gap-1 pt-2 border-t border-slate-100">
                     <button
                       type="button"
                       onClick={() => handleSelect(order)}
-                      className="flex-1 py-1 px-2 rounded-md bg-[#075e54] hover:bg-[#054c44] text-white text-[10.5px] font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                      className="flex-1 py-1 px-1.5 rounded-md bg-[#075e54] hover:bg-[#054c44] text-white text-[10.5px] font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
                       title={slipBtnLabel}
                     >
                       <Eye className="w-3 h-3" />
                       <span>{slipBtnLabel}</span>
                     </button>
+
+                    {order.phone && (
+                      <a
+                        href={`https://wa.me/${order.phone.replace(/[^0-9]/g, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="py-1 px-1.5 rounded-md bg-[#25d366] hover:bg-[#20ba59] text-white text-[10.5px] font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                        title="WhatsApp"
+                      >
+                        <MessageCircle className="w-3 h-3 fill-white" />
+                      </a>
+                    )}
+
                     {onEditCustomer && (
                       <button
                         type="button"
                         onClick={() => onEditCustomer(order)}
-                        className="py-1 px-2 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10.5px] font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer border border-slate-200"
+                        className="py-1 px-1.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10.5px] font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer border border-slate-200"
                         title={editBtnLabel}
                       >
                         <Edit3 className="w-3 h-3" />
-                        <span>{editBtnLabel}</span>
                       </button>
                     )}
                   </div>
@@ -175,6 +205,6 @@ export const RecentOrdersQuickView: React.FC<RecentOrdersQuickViewProps> = ({
       )}
     </div>
   );
-};
+});
 
 export default RecentOrdersQuickView;

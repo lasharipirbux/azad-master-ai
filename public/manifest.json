@@ -1,0 +1,39 @@
+{
+  "id": "/",
+  "name": "Azad Master - آزاد ماسٹر",
+  "short_name": "Azad Master",
+  "description": "پیشہ ورانہ درزی ماسٹر ناپ رجسٹر، کسٹمر ریکارڈ اور واٹس ایپ کٹنگ پرچی ایپ",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#075e54",
+  "theme_color": "#075e54",
+  "categories": ["business", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/azad-master-logo.svg",
+      "sizes": "500x500",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

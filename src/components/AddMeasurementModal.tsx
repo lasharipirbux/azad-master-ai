@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Customer, CustomerMeasurements, OrderStatus } from '../types';
 import { CountrySelectorModal } from './CountrySelectorModal';
 import { getCountryByCode, allCountries } from '../data/countries';
 import { getStatusMeta, ORDER_STATUS_LIST, ORDER_STATUSES } from '../utils/orderStatus';
+import { getAvatarColorByName, getCustomerInitial, AVATAR_PALETTES } from '../utils/avatarColors';
 import { 
   X, 
   Scissors, 
@@ -15,13 +16,15 @@ import {
   Ruler,
   Bot,
   Mic,
+  Square,
   CheckCircle2,
   ChevronDown,
   Globe,
   Clock,
   Wallet,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Palette
 } from 'lucide-react';
 import { parseMeasurementsFromText } from '../utils/measurementParser';
 import { toInputDateFormat, toDisplayDateFormat, getOffsetDateString, getDeliveryStatus } from '../utils/deliveryDate';
@@ -136,7 +139,7 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
   const [shalwar, setShalwar] = useState(m?.shalwar || '37');
   const [pancha, setPancha] = useState(m?.pancha || '8.5');
   const [pocket, setPocket] = useState(m?.pocket || '1 Front, 1 Side');
-  const [specialNotes, setSpecialNotes] = useState(m?.specialNotes || '');
+  const [specialNotes, setSpecialNotes] = useState(initialCustomer?.notes || m?.specialNotes || '');
 
   const handleCategoryChange = (category: string) => {
     setDressCategory(category);
@@ -265,9 +268,12 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
 
   const [imageUri, setImageUri] = useState<string | null>(initialCustomer?.imageUri || null);
   const [isOcrScanning, setIsOcrScanning] = useState(false);
+  const [avatarColor, setAvatarColor] = useState<string>(initialCustomer?.avatarColor || '');
+  const [showColorPicker, setShowColorPicker] = useState<boolean>(false);
 
-  // Single Letter Avatar
-  const avatarLetter = name.trim().length > 0 ? name.trim().charAt(0).toUpperCase() : 'P';
+  // Dynamic Avatar Theme & Letter
+  const activeAvatarTheme = getAvatarColorByName(name, avatarColor);
+  const avatarLetter = getCustomerInitial(name);
 
   useEffect(() => {
     (window as any).updateAvatarLetter = (newName: string) => {
@@ -293,22 +299,147 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
   const [showAiVoiceBox, setShowAiVoiceBox] = useState(false);
   const [aiInputText, setAiInputText] = useState('');
   const [aiPreviewData, setAiPreviewData] = useState<Partial<CustomerMeasurements> | null>(null);
+  const [isAiRecording, setIsAiRecording] = useState(false);
 
-  const handleVoiceRecordAI = () => {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+  const isAiRecordingRef = useRef(false);
+  const recognitionRef = useRef<any>(null);
+  const accumulatedTranscriptRef = useRef('');
+
+  // Clean up speech recognition on modal unmount
+  useEffect(() => {
+    return () => {
+      isAiRecordingRef.current = false;
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch {}
+      }
+    };
+  }, []);
+
+  const stopVoiceRecordAI = () => {
+    isAiRecordingRef.current = false;
+    setIsAiRecording(false);
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+    }
+    const current = (accumulatedTranscriptRef.current.trim() + ' ' + aiInputText.trim()).trim();
+    if (current) {
+      const parsed = parseMeasurementsFromText(current);
+      if (parsed && Object.keys(parsed).length > 0) {
+        setAiPreviewData(parsed);
+      }
+    }
+  };
+
+  const startVoiceRecordAI = () => {
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      alert(isRtl ? "آپ کا براؤزر وائس ان پٹ کو سپورٹ نہیں کرتا۔" : "Your browser does not support voice input.");
+      return;
+    }
+
+    try {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch {}
+      }
+
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       const recognition = new SpeechRecognition();
-      recognition.lang = isRtl ? 'ur-PK' : 'en-US';
-      recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        const combined = aiInputText ? `${aiInputText} ${transcript}` : transcript;
-        setAiInputText(combined);
-        const parsed = parseMeasurementsFromText(combined);
-        if (parsed) setAiPreviewData(parsed);
+      recognitionRef.current = recognition;
+
+      // Pakistani Urdu (ur-PK) for optimal local dialect, numerals, and tailoring terms
+      recognition.lang = 'ur-PK';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+
+      isAiRecordingRef.current = true;
+      setIsAiRecording(true);
+
+      // Preserve previously typed/spoken input as baseline
+      accumulatedTranscriptRef.current = aiInputText ? aiInputText.trim() + ' ' : '';
+
+      recognition.onstart = () => {
+        setIsAiRecording(true);
       };
+
+      recognition.onresult = (event: any) => {
+        let sessionFinal = '';
+        let interim = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const trans = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            sessionFinal += trans + ' ';
+          } else {
+            interim += trans;
+          }
+        }
+
+        if (sessionFinal) {
+          accumulatedTranscriptRef.current += sessionFinal;
+        }
+
+        const fullSpoken = (accumulatedTranscriptRef.current + interim).trim();
+        if (fullSpoken) {
+          setAiInputText(fullSpoken);
+          const parsed = parseMeasurementsFromText(fullSpoken);
+          if (parsed && Object.keys(parsed).length > 0) {
+            setAiPreviewData(parsed);
+          }
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn("SpeechRecognition error in continuous mode:", event.error);
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+          isAiRecordingRef.current = false;
+          setIsAiRecording(false);
+          alert(isRtl 
+            ? "مائیک کی اجازت درکار ہے۔ براہ کرم براؤزر میں مائیکروفون الاؤ (Allow) کریں۔" 
+            : "Microphone permission denied. Please allow microphone access in browser settings.");
+        }
+        // Silence (no-speech) or network pauses: do NOT stop! onend will restart seamlessly.
+      };
+
+      recognition.onend = () => {
+        // Continuous listening: If user hasn't explicitly stopped, KEEP LISTENING through pauses & silence!
+        if (isAiRecordingRef.current) {
+          try {
+            recognition.start();
+          } catch (e) {
+            setTimeout(() => {
+              if (isAiRecordingRef.current) {
+                try {
+                  recognition.start();
+                } catch (restartErr) {
+                  console.warn("Speech recognition restart retry error:", restartErr);
+                }
+              }
+            }, 200);
+          }
+        } else {
+          setIsAiRecording(false);
+        }
+      };
+
       recognition.start();
+    } catch (e) {
+      console.warn("SpeechRecognition start error:", e);
+      isAiRecordingRef.current = false;
+      setIsAiRecording(false);
+    }
+  };
+
+  const handleVoiceRecordAI = () => {
+    if (isAiRecording) {
+      stopVoiceRecordAI();
     } else {
-      alert(isRtl ? "آپ کا براؤزر وائس ان پٹ کو سپورٹ نہیں کرتا۔" : "Your browser does not support voice input.");
+      startVoiceRecordAI();
     }
   };
 
@@ -475,8 +606,10 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
       totalAmount: totalAmount.trim(),
       advanceAmount: advanceAmount.trim(),
       balanceAmount: totalAmount.trim() ? String(balanceNum) : '',
+      notes: specialNotes.trim(),
       date: initialCustomer?.date || new Date().toLocaleDateString('en-GB'),
-      deliveryDate: deliveryDate ? toDisplayDateFormat(deliveryDate) : ''
+      deliveryDate: deliveryDate ? toDisplayDateFormat(deliveryDate) : '',
+      avatarColor: avatarColor.trim() ? avatarColor.trim() : undefined
     });
   };
 
@@ -567,44 +700,85 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowAiVoiceBox(!showAiVoiceBox)}
-                  className="text-[10px] bg-[#075e54] hover:bg-[#054c44] text-[#dcf8c6] px-2 py-1 rounded-lg cursor-pointer transition-colors border border-[#128c7e]/30 flex items-center gap-1"
-                  title="Voice / Text"
+                  onClick={() => {
+                    setShowAiVoiceBox(true);
+                    if (!isAiRecording) {
+                      startVoiceRecordAI();
+                    } else {
+                      stopVoiceRecordAI();
+                    }
+                  }}
+                  className={`text-[10.5px] px-2.5 py-1 rounded-lg cursor-pointer transition-all duration-200 border flex items-center gap-1.5 font-bold ${
+                    isAiRecording
+                      ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-400 shadow-md ring-2 ring-rose-400 animate-pulse'
+                      : 'bg-[#075e54] hover:bg-[#054c44] text-[#dcf8c6] border-[#128c7e]/30'
+                  }`}
+                  title={isAiRecording ? (isRtl ? 'ریکارڈنگ روکیں' : 'Stop Listening') : (isRtl ? 'وائس ناپ (مسلسل مائیک)' : 'Voice Input (Continuous)')}
                 >
-                  <Mic className="w-3 h-3 text-[#25d366]" />
+                  {isAiRecording ? (
+                    <>
+                      <Square className="w-3 h-3 fill-white" />
+                      <span>{isRtl ? 'ریکارڈنگ آن...' : 'Recording...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="w-3.5 h-3.5 text-[#25d366]" />
+                      <span>{isRtl ? 'وائس ناپ' : 'Voice'}</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
             
-            <div className="flex items-center gap-3.5">
-              {/* Avatar Preview / Letter Box */}
-              <div 
-                id="avatarContainer" 
-                className="relative w-16 h-16 rounded-full overflow-hidden bg-indigo-100 border border-indigo-300 flex items-center justify-center text-indigo-700 font-bold text-xl shadow-inner shrink-0"
-              >
-                {/* تصویر کے لیے */}
-                <img 
-                  id="avatarPreview" 
-                  src={imageUri || ''} 
-                  alt="Avatar" 
-                  className={`w-full h-full object-cover ${imageUri ? '' : 'hidden'}`} 
-                />
-                {/* نام کے پہلے حرف کے لیے (مثلاً P یا پ) */}
-                <span id="avatarLetter" className={imageUri ? 'hidden' : ''}>
-                  {avatarLetter}
-                </span>
+            <div className="flex items-start gap-3.5">
+              {/* Avatar Preview / Letter Box with Color Theme */}
+              <div className="flex flex-col items-center gap-1.5 shrink-0">
+                <div 
+                  id="avatarContainer" 
+                  className={`relative w-16 h-16 rounded-2xl overflow-hidden ${
+                    imageUri ? 'bg-slate-100 border border-slate-300' : `${activeAvatarTheme.gradientClass} ${activeAvatarTheme.solidTextClass} border-2 border-white ring-2 ${activeAvatarTheme.ringClass}`
+                  } flex items-center justify-center font-black text-2xl shadow-md shrink-0 transition-all`}
+                >
+                  {/* تصویر کے لیے */}
+                  {imageUri ? (
+                    <img 
+                      id="avatarPreview" 
+                      src={imageUri} 
+                      alt="Avatar" 
+                      className="w-full h-full object-cover" 
+                    />
+                  ) : (
+                    /* نام کے پہلے حرف کے لیے (مثلاً ع، م، P وغیرہ) */
+                    <span id="avatarLetter" className="select-none leading-none drop-shadow-xs font-black">
+                      {avatarLetter}
+                    </span>
+                  )}
 
-                {imageUri && (
+                  {imageUri && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setImageUri(null);
+                      }}
+                      title={t.removePhoto || "Remove photo"}
+                      className="absolute inset-0 bg-[#062c1d]/60 text-white opacity-0 hover:opacity-100 flex items-center justify-center text-[10px] font-bold transition-opacity cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Avatar Color Picker Toggle */}
+                {!imageUri && (
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setImageUri(null);
-                    }}
-                    title={t.removePhoto || "Remove photo"}
-                    className="absolute inset-0 bg-[#062c1d]/60 text-white opacity-0 hover:opacity-100 flex items-center justify-center text-[10px] font-bold transition-opacity cursor-pointer"
+                    onClick={() => setShowColorPicker((prev) => !prev)}
+                    className="flex items-center gap-1 text-[10px] font-bold text-slate-600 hover:text-[#0d4a2a] bg-white hover:bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-md shadow-2xs transition-all cursor-pointer"
+                    title={isRtl ? 'اواتار کا رنگ منتخب کریں' : 'Choose Avatar Color'}
                   >
-                    ✕
+                    <Palette className="w-2.5 h-2.5 text-emerald-700" />
+                    <span>{avatarColor ? (isRtl ? 'رنگ منتخب' : 'Custom') : (isRtl ? 'خودکار' : 'Auto')}</span>
                   </button>
                 )}
               </div>
@@ -683,6 +857,58 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                 )}
               </div>
             </div>
+
+            {/* Avatar Color Selector Dropdown / Tray */}
+            {showColorPicker && !imageUri && (
+              <div className="mt-2 p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 animate-in fade-in zoom-in-95 duration-100">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                    <Palette className="w-3 h-3 text-[#0d4a2a]" />
+                    <span>{isRtl ? 'اواتار کا رنگ منتخب کریں:' : 'Select Avatar Color:'}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setAvatarColor('')}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-md border transition-all cursor-pointer ${
+                      !avatarColor
+                        ? 'bg-emerald-700 text-white border-emerald-800 shadow-2xs'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    ✨ {isRtl ? 'خودکار (نام کے مطابق)' : 'Auto (By Name)'}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5 pt-1">
+                  {AVATAR_PALETTES.map((palette) => {
+                    const isSelected = avatarColor === palette.id;
+                    const isAutoMatch = !avatarColor && activeAvatarTheme.id === palette.id;
+                    return (
+                      <button
+                        key={palette.id}
+                        type="button"
+                        onClick={() => setAvatarColor(palette.id)}
+                        className={`h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer relative border ${
+                          isSelected
+                            ? 'ring-2 ring-emerald-700 ring-offset-1 border-emerald-800 scale-105'
+                            : isAutoMatch
+                            ? 'ring-1 ring-slate-400 border-slate-300'
+                            : 'border-slate-200/80 hover:scale-105'
+                        } ${palette.bgClass}`}
+                        title={isRtl ? palette.nameUrdu : palette.nameEn}
+                      >
+                        <span className={`w-3 h-3 rounded-full ${palette.badgeBg}`} />
+                        {isSelected && (
+                          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-700 text-white flex items-center justify-center text-[7px] font-black">
+                            ✓
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Expanded AI Voice / Text Panel */}
@@ -694,14 +920,34 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                   : 'Speak or type all measurements (e.g. "Length 40, Shoulder 18, Sleeve 22, Chest 38, Waist 36, Daaman 26, Collar 15.5, Shalwar 37, Pancha 8.5")'}
               </p>
 
+              {isAiRecording && (
+                <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-rose-500/25 border border-rose-400/60 text-white text-[11px] animate-pulse">
+                  <div className="flex items-center gap-2 font-medium">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-400 animate-ping shrink-0" />
+                    <span>{isRtl ? '🎙️ مسلسل مائیک آن ہے (ur-PK)... وقفے پر بند نہیں ہوگا۔ جب تمام ناپ بول لیں تو روک دیں۔' : '🎙️ Continuous listening (ur-PK)... Speak freely with pauses.'}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={stopVoiceRecordAI}
+                    className="text-[10px] bg-rose-600 hover:bg-rose-700 text-white font-bold px-2 py-0.5 rounded cursor-pointer shrink-0 ml-2"
+                  >
+                    {isRtl ? 'بند کریں' : 'Stop'}
+                  </button>
+                </div>
+              )}
+
               <div className="flex items-center gap-1.5" dir="ltr">
                 <button
                   type="button"
                   onClick={handleVoiceRecordAI}
-                  className="w-8 h-8 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-xs cursor-pointer"
-                  title="Voice Input"
+                  className={`w-9 h-9 rounded-lg text-white flex items-center justify-center shrink-0 shadow-xs cursor-pointer transition-all active:scale-95 ${
+                    isAiRecording
+                      ? 'bg-rose-600 hover:bg-rose-700 ring-2 ring-rose-400 animate-pulse'
+                      : 'bg-emerald-600 hover:bg-emerald-500'
+                  }`}
+                  title={isAiRecording ? (isRtl ? 'مائیک بند کریں' : 'Stop Listening') : (isRtl ? 'مائیک شروع کریں' : 'Start Voice Input')}
                 >
-                  <Mic className="w-4 h-4" />
+                  {isAiRecording ? <Square className="w-4 h-4 fill-white" /> : <Mic className="w-4 h-4" />}
                 </button>
                 <input
                   type="text"
@@ -709,13 +955,13 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                   onChange={(e) => setAiInputText(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleParseAIText())}
                   placeholder={isRtl ? "لمبائی 40، تیرا 18، بازو 22..." : "Length 40, Shoulder 18..."}
-                  className="flex-1 px-2.5 py-1 rounded-lg bg-emerald-900 border border-emerald-700 text-xs text-white placeholder-emerald-300/60 outline-none focus:ring-1 focus:ring-emerald-400"
+                  className="flex-1 px-2.5 py-1.5 rounded-lg bg-emerald-900 border border-emerald-700 text-xs text-white placeholder-emerald-300/60 outline-none focus:ring-1 focus:ring-emerald-400"
                   dir={isRtl ? 'rtl' : 'ltr'}
                 />
                 <button
                   type="button"
                   onClick={() => handleParseAIText()}
-                  className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold shrink-0 transition-colors cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold shrink-0 transition-colors cursor-pointer"
                 >
                   {isRtl ? 'چیک کریں' : 'Parse'}
                 </button>
@@ -1006,22 +1252,75 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
 
             </div>
 
-            {/* Optional Notes & Pocket Mini Bar */}
-            <div className="pt-1.5 border-t border-emerald-200/60 grid grid-cols-2 gap-1.5 shrink-0">
-              <input 
-                type="text" 
-                value={pocket} 
-                onChange={(e) => setPocket(e.target.value)} 
-                placeholder={t.pocketLabel || "پکٹ / جیب..."}
-                className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-[10px] text-slate-700 outline-none"
+            {/* Customer Note & Tailoring Preferences (کسٹمر نوٹ اور خصوصی فرمائش) */}
+            <div className="pt-2 border-t border-emerald-200/80 space-y-1.5 shrink-0">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-extrabold text-slate-800 flex items-center gap-1.5">
+                  <span className="text-amber-600">📝</span>
+                  <span>{isRtl ? 'کسٹمر نوٹ و سلائی کی خاص فرمائش:' : 'Customer Note & Custom Instructions:'}</span>
+                </label>
+                <span className="text-[10px] text-slate-400 font-medium">
+                  {isRtl ? '(کٹنگ و سلائی کے وقت نظر آئے گا)' : '(Visible during cutting & stitching)'}
+                </span>
+              </div>
+
+              {/* Quick suggestion tags for Darzi / Tailor */}
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
+                {[
+                  { labelUrdu: 'بین (Ban)', labelEn: 'Ban' },
+                  { labelUrdu: 'کالر (Collar)', labelEn: 'Collar' },
+                  { labelUrdu: '1 سائیڈ جیب', labelEn: '1 Side Pocket' },
+                  { labelUrdu: '2 سائیڈ جیب', labelEn: '2 Side Pockets' },
+                  { labelUrdu: 'فرنٹ جیب', labelEn: 'Front Pocket' },
+                  { labelUrdu: 'کف بازو', labelEn: 'Cuff Sleeves' },
+                  { labelUrdu: 'کھلا بازو', labelEn: 'Open Sleeves' },
+                  { labelUrdu: 'لوز فٹنگ', labelEn: 'Loose Fit' },
+                  { labelUrdu: 'اسمارٹ فٹنگ', labelEn: 'Smart Fit' },
+                  { labelUrdu: 'گول دامن', labelEn: 'Round Daman' },
+                  { labelUrdu: 'چورس دامن', labelEn: 'Square Daman' },
+                  { labelUrdu: 'ڈبل سلائی', labelEn: 'Double Stitch' },
+                ].map((tag, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      const tagText = isRtl ? tag.labelUrdu : tag.labelEn;
+                      setSpecialNotes((prev) => {
+                        const trimmed = prev.trim();
+                        if (!trimmed) return tagText;
+                        if (trimmed.includes(tagText)) return trimmed;
+                        return `${trimmed}، ${tagText}`;
+                      });
+                    }}
+                    className="px-2 py-0.5 rounded-md bg-white hover:bg-emerald-50 active:bg-emerald-100 border border-slate-300 hover:border-emerald-400 text-slate-700 hover:text-emerald-900 text-[10px] font-bold whitespace-nowrap transition-all cursor-pointer shadow-2xs shrink-0"
+                  >
+                    + {isRtl ? tag.labelUrdu : tag.labelEn}
+                  </button>
+                ))}
+              </div>
+
+              {/* Multi-line Note Textarea */}
+              <textarea
+                rows={2}
+                value={specialNotes}
+                onChange={(e) => setSpecialNotes(e.target.value)}
+                placeholder={isRtl ? 'کسٹمر کی خاص فرمائش، کالر، بین، جیب، فٹنگ یا ادھار کا نوٹ یہاں لکھیں...' : 'Enter customer preferences, collar, ban, pockets, fitting, or balance notes...'}
+                className="w-full px-2.5 py-1.5 bg-white border border-slate-300 focus:border-[#075e54] focus:ring-1 focus:ring-[#075e54] rounded-lg text-xs text-slate-800 placeholder:text-slate-400 outline-none shadow-2xs transition-all"
               />
-              <input 
-                type="text" 
-                value={specialNotes} 
-                onChange={(e) => setSpecialNotes(e.target.value)} 
-                placeholder={t.specialNotesLabel || "خصوصی ہدایات..."}
-                className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-[10px] text-slate-700 outline-none"
-              />
+
+              {/* Pocket details line */}
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-600 shrink-0">
+                  {t.pocketLabel || (isRtl ? 'جیب / پکٹ:' : 'Pockets:')}
+                </span>
+                <input 
+                  type="text" 
+                  value={pocket} 
+                  onChange={(e) => setPocket(e.target.value)} 
+                  placeholder={t.pocketLabel || "1 Front, 1 Side Pocket..."}
+                  className="flex-1 px-2 py-1 bg-white border border-slate-200 rounded-md text-[10.5px] text-slate-700 outline-none"
+                />
+              </div>
             </div>
 
           </div>
