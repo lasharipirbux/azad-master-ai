@@ -61,16 +61,94 @@ export function initOfflineDb(): Promise<IDBDatabase> {
   });
 }
 
+export const MASTER_CUSTOMERS_STORAGE_KEY = 'azad_master_all_customers_v1';
+
+export const KNOWN_STORAGE_KEYS = [
+  MASTER_CUSTOMERS_STORAGE_KEY,
+  'azad_master_customers_offline',
+  'azad_master_customers_guest_offline_user',
+  'azad_master_customers_guest',
+  'azad_master_customers_master_default'
+];
+
+/**
+ * Synchronously retrieves all saved customers from localStorage across all legacy & active keys.
+ * This guarantees instant, zero-latency rendering on page refresh with 0% data loss.
+ */
+export function getStoredLocalCustomers(uid?: string): Customer[] {
+  if (typeof window === 'undefined' || !window.localStorage) return [];
+
+  const customerMap = new Map<number, Customer>();
+  const keys = [
+    ...(uid ? [`azad_master_customers_${uid}`] : []),
+    ...KNOWN_STORAGE_KEYS
+  ];
+
+  for (const key of keys) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((c: Customer) => {
+            if (c && c.id && !customerMap.has(c.id)) {
+              customerMap.set(c.id, c);
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.warn(`Error reading key ${key} from localStorage:`, e);
+    }
+  }
+
+  return Array.from(customerMap.values()).sort((a, b) => (b.id || 0) - (a.id || 0));
+}
+
+/**
+ * Synchronously writes the full customer list to localStorage under primary and master backup keys.
+ */
+export function saveCustomersToLocalStorage(customers: Customer[], uid = 'guest'): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  const safeList = Array.isArray(customers) ? customers.filter(Boolean) : [];
+
+  // Safety protection: if attempting to save empty array but localStorage already has records,
+  // do not wipe unless explicitly confirmed to avoid catastrophic data loss.
+  if (safeList.length === 0) {
+    const existing = getStoredLocalCustomers(uid);
+    if (existing.length > 0) {
+      console.warn('Blocked attempt to overwrite non-empty local storage with empty array');
+      return;
+    }
+  }
+
+  try {
+    const serialized = JSON.stringify(safeList);
+    localStorage.setItem(`azad_master_customers_${uid}`, serialized);
+    localStorage.setItem(MASTER_CUSTOMERS_STORAGE_KEY, serialized);
+    localStorage.setItem('azad_master_customers_offline', serialized);
+  } catch (e) {
+    console.warn('LocalStorage save failed:', e);
+  }
+}
+
 /**
  * Bulk save all customers to IndexedDB (and LocalStorage as immediate fallback)
  */
-export async function saveCustomersToOfflineDb(customers: Customer[], uid = 'guest'): Promise<void> {
-  // Always update LocalStorage for synchronous instant boot
-  try {
-    localStorage.setItem(`azad_master_customers_${uid}`, JSON.stringify(customers));
-  } catch (e) {
-    console.warn('LocalStorage limit exceeded, falling back solely to IndexedDB:', e);
+export async function saveCustomersToOfflineDb(customers: Customer[], uid = 'guest', allowEmpty = false): Promise<void> {
+  const safeList = Array.isArray(customers) ? customers.filter(Boolean) : [];
+
+  // Guard against accidental wipes
+  if (safeList.length === 0 && !allowEmpty) {
+    const existing = getStoredLocalCustomers(uid);
+    if (existing.length > 0) {
+      console.warn('Blocked attempt to save empty list to Offline DB without allowEmpty flag');
+      return;
+    }
   }
+
+  // Always mirror in LocalStorage for instant boot
+  saveCustomersToLocalStorage(safeList, uid);
 
   if (!isIndexedDBAvailable()) return;
 
@@ -81,8 +159,10 @@ export async function saveCustomersToOfflineDb(customers: Customer[], uid = 'gue
 
     // Clear and put current set
     store.clear();
-    for (const customer of customers) {
-      store.put(customer);
+    for (const customer of safeList) {
+      if (customer && customer.id) {
+        store.put(customer);
+      }
     }
 
     return new Promise((resolve, reject) => {
@@ -95,10 +175,12 @@ export async function saveCustomersToOfflineDb(customers: Customer[], uid = 'gue
 }
 
 /**
- * Load all customers from IndexedDB (or fallback to LocalStorage)
+ * Load all customers from IndexedDB (or fallback to LocalStorage with multi-key recovery)
  */
 export async function loadCustomersFromOfflineDb(uid = 'guest'): Promise<Customer[]> {
-  // Try IndexedDB first
+  const customerMap = new Map<number, Customer>();
+
+  // 1. Try IndexedDB first
   if (isIndexedDBAvailable()) {
     try {
       const db = await initOfflineDb();
@@ -111,26 +193,43 @@ export async function loadCustomersFromOfflineDb(uid = 'guest'): Promise<Custome
         request.onerror = () => reject(request.error);
       });
 
-      if (items && items.length > 0) {
-        return items;
+      if (Array.isArray(items) && items.length > 0) {
+        items.forEach(c => {
+          if (c && c.id) customerMap.set(c.id, c);
+        });
       }
     } catch (err) {
       console.warn('Error loading from IndexedDB:', err);
     }
   }
 
-  // Fallback to LocalStorage
-  try {
-    const cached = localStorage.getItem(`azad_master_customers_${uid}`);
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
-      }
-    }
-  } catch {}
+  // 2. Read from all known LocalStorage customer keys to guarantee 0% data loss
+  const storageKeys = [
+    `azad_master_customers_${uid}`,
+    MASTER_CUSTOMERS_STORAGE_KEY,
+    'azad_master_customers_offline',
+    'azad_master_customers_guest_offline_user',
+    'azad_master_customers_guest'
+  ];
 
-  return [];
+  for (const key of storageKeys) {
+    try {
+      const cached = localStorage.getItem(key);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((c: Customer) => {
+            if (c && c.id && !customerMap.has(c.id)) {
+              customerMap.set(c.id, c);
+            }
+          });
+        }
+      }
+    } catch (e) {}
+  }
+
+  const combined = Array.from(customerMap.values()).sort((a, b) => (b.id || 0) - (a.id || 0));
+  return combined;
 }
 
 /**

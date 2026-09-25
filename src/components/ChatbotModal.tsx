@@ -390,32 +390,26 @@ export const ChatbotModal: React.FC<ChatbotModalProps> = ({
 
         isListeningRef.current = true;
         setIsListening(true);
-        accumulatedTranscriptRef.current = inputText ? inputText.trim() + ' ' : '';
+        accumulatedTranscriptRef.current = '';
 
         recognition.onstart = () => {
           setIsListening(true);
         };
 
         recognition.onresult = (event: any) => {
-          let sessionFinal = '';
-          let interim = '';
-
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            const trans = event.results[i][0].transcript;
+          let finalTranscript = '';
+          for (let i = 0; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
-              sessionFinal += trans + ' ';
-            } else {
-              interim += trans;
+              const trans = event.results[i][0]?.transcript;
+              if (trans) {
+                finalTranscript += trans + ' ';
+              }
             }
           }
 
-          if (sessionFinal) {
-            accumulatedTranscriptRef.current += sessionFinal;
-          }
-
-          const fullSpoken = (accumulatedTranscriptRef.current + interim).trim();
-          if (fullSpoken) {
-            setInputText(fullSpoken);
+          const cleanFinal = finalTranscript.trim();
+          if (cleanFinal) {
+            setInputText(cleanFinal);
           }
         };
 

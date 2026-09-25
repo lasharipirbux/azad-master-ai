@@ -52,91 +52,147 @@ export type StandardMeasurementKey =
   | 'pocket' 
   | 'specialNotes';
 
-export function parseMeasurementsFromText(input: string): Partial<CustomerMeasurements> | null {
-  if (!input || typeof input !== 'string') return null;
+export interface MeasurementConflict {
+  key: StandardMeasurementKey;
+  labelUrdu: string;
+  labelEnglish: string;
+  values: string[];
+  chosen: string;
+}
+
+export interface DetailedMeasurementResult {
+  measurements: Partial<CustomerMeasurements>;
+  conflicts: MeasurementConflict[];
+}
+
+const MEASUREMENT_METADATA: Record<StandardMeasurementKey, { labelUrdu: string; labelEnglish: string }> = {
+  length: { labelUrdu: 'لمبائی', labelEnglish: 'Length' },
+  shoulder: { labelUrdu: 'تیرا', labelEnglish: 'Shoulder (Teera)' },
+  sleeves: { labelUrdu: 'بازو', labelEnglish: 'Sleeves' },
+  chest: { labelUrdu: 'سینہ / چھاتی', labelEnglish: 'Chest' },
+  waist: { labelUrdu: 'کمر', labelEnglish: 'Waist' },
+  daaman: { labelUrdu: 'گھیرا / دامن', labelEnglish: 'Daaman (Gheer)' },
+  collar: { labelUrdu: 'کالر / بین', labelEnglish: 'Collar (Ban)' },
+  shalwar: { labelUrdu: 'شلوار لمبائی', labelEnglish: 'Shalwar Length' },
+  pancha: { labelUrdu: 'پانچہ', labelEnglish: 'Pancha' },
+  pocket: { labelUrdu: 'جیب', labelEnglish: 'Pocket' },
+  specialNotes: { labelUrdu: 'نوٹ', labelEnglish: 'Notes' }
+};
+
+export function parseMeasurementsWithDetails(input: string): DetailedMeasurementResult {
+  if (!input || typeof input !== 'string') {
+    return { measurements: {}, conflicts: [] };
+  }
 
   const normalized = normalizeNumerals(input).toLowerCase();
   const found: Partial<CustomerMeasurements> = {};
+  const conflicts: MeasurementConflict[] = [];
 
   // Patterns for each field
   const patterns: { key: StandardMeasurementKey; regex: RegExp[] }[] = [
     {
       key: 'length',
       regex: [
-        /(?:لمبائی|لمبائ|lambai|length)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/i,
-        /([0-9]+(?:\.[0-9]+)?)\s*(?:انچ\s*)?(?:لمبائی|lambai|length)/i
+        /(?:لمبائی|لمبائ|lambai|length|ڊيگهه|لمبائي)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/gi,
+        /([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)\s*(?:انچ\s*)?(?:لمبائی|lambai|length|ڊيگهه)/gi
       ]
     },
     {
       key: 'shoulder', // تیرا
       regex: [
-        /(?:تیرا|تیرہ|tira|teera|shoulder)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/i,
-        /([0-9]+(?:\.[0-9]+)?)\s*(?:انچ\s*)?(?:تیرا|tira|shoulder)/i
+        /(?:تیرا|تیرہ|tira|teera|shoulder|ٽيرو|तीरा)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/gi,
+        /([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)\s*(?:انچ\s*)?(?:تیرا|tira|teera|shoulder|ٽيرو)/gi
       ]
     },
     {
       key: 'sleeves', // بازو
       regex: [
-        /(?:بازو|بازوں|bazo|bazu|sleeve|sleeves)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/i,
-        /([0-9]+(?:\.[0-9]+)?)\s*(?:انچ\s*)?(?:بازو|bazo|sleeve)/i
+        /(?:بازو|بازوں|bazo|bazu|sleeve|sleeves|ٻانهن|बाजू)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/gi,
+        /([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)\s*(?:انچ\s*)?(?:بازو|bazo|bazu|sleeve|sleeves|ٻانهن)/gi
       ]
     },
     {
-      key: 'chest', // سینہ
+      key: 'chest', // سینہ / چھاتی
       regex: [
-        /(?:سینہ|چھاتی|seena|chest)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/i,
-        /([0-9]+(?:\.[0-9]+)?)\s*(?:انچ\s*)?(?:سینہ|seena|chest)/i
+        /(?:سینہ|چھاتی|seena|chest|ڇاتي|सीना)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/gi,
+        /([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)\s*(?:انچ\s*)?(?:سینہ|چھاتی|seena|chest|ڇاتي)/gi
       ]
     },
     {
-      key: 'daaman', // گھیرا
+      key: 'daaman', // گھیرا / دامن
       regex: [
-        /(?:گھیرا|گھیراؤ|دامن|gheera|ghera|daaman|daman)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/i,
-        /([0-9]+(?:\.[0-9]+)?)\s*(?:انچ\s*)?(?:گھیرا|gheera|daaman)/i
+        /(?:گھیرا|گھیراؤ|دامن|gheera|ghera|daaman|daman|घेरा)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/gi,
+        /([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)\s*(?:انچ\s*)?(?:گھیرا|gheera|ghera|daaman|daman)/gi
       ]
     },
     {
       key: 'collar', // کالر / بین
       regex: [
-        /(?:کالر|بین|بین کالر|collar|ban|bain)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/i,
-        /([0-9]+(?:\.[0-9]+)?)\s*(?:انچ\s*)?(?:کالر|بین|collar|ban)/i
+        /(?:کالر|بین|بین\s*کالر|collar|ban|bain|ڪالر|कॉलर|बैन)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/gi,
+        /([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)\s*(?:انچ\s*)?(?:کالر|بین|collar|ban|bain|ڪالر)/gi
       ]
     },
     {
       key: 'shalwar', // شلوار
       regex: [
-        /(?:شلوار\s*لمبائی|شلوار|shalwar\s*length|shalwar|salwar|trouser)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/i,
-        /([0-9]+(?:\.[0-9]+)?)\s*(?:انچ\s*)?(?:شلوار|shalwar)/i
+        /(?:شلوار\s*لمبائی|شلوار|shalwar\s*length|shalwar|salwar|trouser|سٿڻ|सलوار)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/gi,
+        /([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)\s*(?:انچ\s*)?(?:شلوار|shalwar|salwar|سٿڻ)/gi
       ]
     },
     {
       key: 'pancha', // پانچہ
       regex: [
-        /(?:پانچہ|پائنچہ|پانچا|pancha|poncha|paincha)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/i,
-        /([0-9]+(?:\.[0-9]+)?)\s*(?:انچ\s*)?(?:پانچہ|pancha)/i
+        /(?:پانچہ|پائنچہ|پانچا|pancha|paancha|poncha|paincha|پانچو|पाँचा)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/gi,
+        /([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)\s*(?:انچ\s*)?(?:پانچہ|pancha|paancha|poncha|پانچو)/gi
       ]
     },
     {
       key: 'waist', // کمر
       regex: [
-        /(?:کمر|waist|kamar)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/i,
-        /([0-9]+(?:\.[0-9]+)?)\s*(?:انچ\s*)?(?:کمر|waist)/i
+        /(?:کمر|waist|kamar|ڪمر)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/gi,
+        /([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)\s*(?:انچ\s*)?(?:کمر|waist|kamar|ڪمر)/gi
       ]
     }
   ];
 
-  let matchedCount = 0;
-
   for (const item of patterns) {
+    const matchedNumbers: string[] = [];
+
     for (const r of item.regex) {
-      const match = normalized.match(r);
-      if (match && match[1]) {
-        found[item.key] = match[1].trim();
-        matchedCount++;
-        break;
+      const matches = [...normalized.matchAll(r)];
+      for (const m of matches) {
+        if (m && m[1]) {
+          const val = m[1].trim();
+          if (val && !matchedNumbers.includes(val)) {
+            matchedNumbers.push(val);
+          }
+        }
+      }
+    }
+
+    if (matchedNumbers.length > 0) {
+      // RULE: Always treat the LAST mentioned number as the true intended value (not the first)
+      const lastValue = matchedNumbers[matchedNumbers.length - 1];
+      found[item.key] = lastValue;
+
+      // Check if different distinct numbers were spoken for the same measurement
+      if (matchedNumbers.length > 1) {
+        const meta = MEASUREMENT_METADATA[item.key] || { labelUrdu: item.key, labelEnglish: item.key };
+        conflicts.push({
+          key: item.key,
+          labelUrdu: meta.labelUrdu,
+          labelEnglish: meta.labelEnglish,
+          values: matchedNumbers,
+          chosen: lastValue
+        });
       }
     }
   }
 
-  return matchedCount > 0 ? found : null;
+  return { measurements: found, conflicts };
+}
+
+export function parseMeasurementsFromText(input: string): Partial<CustomerMeasurements> | null {
+  const result = parseMeasurementsWithDetails(input);
+  return Object.keys(result.measurements).length > 0 ? result.measurements : null;
 }

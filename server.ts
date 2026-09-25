@@ -66,6 +66,18 @@ Reply strictly in ${targetLanguageName}. Do not mix any other language. Do not u
 You are the official AI assistant of "Azad Master" (آزاد ماسٹر) — a professional tailoring (darzi) app used to manage customer measurements, orders, and digital records.
 
 =======================================================
+CRITICAL ANTI-REPETITION & VOICE INPUT INTELLIGENCE (HIGHEST PRIORITY):
+- If the user's voice or text input has repeated words, stutter, or repeated numbers (e.g. 'lambai lambai lambai 42 lambai 42...', 'لمبائی لمبائی 40 لمبائی 42...'):
+  1. Understand this is due to microphone repetition or speech recognition buffering, NOT invalid data.
+  2. For every measurement (Length/lambai, Shoulder/teera, Sleeves/bazu, Chest/seena, Waist/kamar, Daaman/ghera, Collar, Shalwar, Pancha): ALWAYS accept the LAST mentioned number as the true intended value, NEVER the first one.
+  3. If different distinct numbers were spoken for the same measurement (e.g. length was mentioned as 40 and then as 42):
+     - Take the last number (42) as the active candidate.
+     - Politely ask the user for confirmation ONLY regarding that specific ambiguous measurement (e.g. "آپ نے لمبائی کے دو مختلف نمبر بتائے ہیں (40 اور 42)، میں نے آخری نمبر 42 چنا ہے۔ کیا یہ درست ہے؟"). Do NOT ask them to repeat the entire set!
+  4. Always output ONLY a clean, final measurement list (نام: نمبر) without any repeated words or tokens.
+  5. Never save to the register or database without the user's explicit confirmation ('yes', 'confirm', 'جی ہاں', 'ٹھیک ہے').
+=======================================================
+
+=======================================================
 CRITICAL MULTILINGUAL DIRECTIVE (HIGHEST PRIORITY):
 The user's active UI application language is: ${targetLanguageName} (Language code: "${normLang}").
 - Reply strictly in ${targetLanguageName}. Do not mix any other language. Do not use Urdu unless the selected language is Urdu.
@@ -130,6 +142,142 @@ If no measurements are being recorded and it's a general question or conversatio
 `;
 }
 
+function extractMeasurementsWithLastValueRule(text: string): {
+  measurements: Record<string, string>;
+  conflicts: { key: string; labelEn: string; labelUr: string; labelSd: string; values: string[]; chosen: string }[];
+} {
+  const p = text.toLowerCase();
+  const measurements: Record<string, string> = {};
+  const conflicts: { key: string; labelEn: string; labelUr: string; labelSd: string; values: string[]; chosen: string }[] = [];
+
+  const patterns = [
+    {
+      key: 'length',
+      labelEn: 'Length',
+      labelUr: 'لمبائی',
+      labelSd: 'لمبائي',
+      regex: [
+        /(?:لمبائی|لمبائ|lambai|length|ڊيگهه|لمبائي)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/gi,
+        /([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)\s*(?:انچ\s*)?(?:لمبائی|lambai|length|ڊيگهه)/gi
+      ]
+    },
+    {
+      key: 'shoulder',
+      labelEn: 'Shoulder',
+      labelUr: 'تیرا',
+      labelSd: 'ٽيرو',
+      regex: [
+        /(?:تیرا|تیرہ|tira|teera|shoulder|ٽيرو|तीरा)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/gi,
+        /([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)\s*(?:انچ\s*)?(?:تیرا|tira|teera|shoulder|ٽيرو)/gi
+      ]
+    },
+    {
+      key: 'sleeves',
+      labelEn: 'Sleeves',
+      labelUr: 'بازو',
+      labelSd: 'ٻانهن',
+      regex: [
+        /(?:بازو|بازوں|bazo|bazu|sleeve|sleeves|ٻانهن|बाजू)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/gi,
+        /([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)\s*(?:انچ\s*)?(?:بازو|bazo|bazu|sleeve|sleeves|ٻانهن)/gi
+      ]
+    },
+    {
+      key: 'chest',
+      labelEn: 'Chest',
+      labelUr: 'سینہ / چھاتی',
+      labelSd: 'ڇاتي',
+      regex: [
+        /(?:سینہ|چھاتی|seena|chest|ڇاتي|सीना)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/gi,
+        /([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)\s*(?:انچ\s*)?(?:سینہ|چھاتی|seena|chest|ڇاتي)/gi
+      ]
+    },
+    {
+      key: 'daaman',
+      labelEn: 'Daaman (Hem)',
+      labelUr: 'گھیرا / دامن',
+      labelSd: 'دامن',
+      regex: [
+        /(?:گھیرا|گھیراؤ|دامن|gheera|ghera|daaman|daman|घेरा)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/gi,
+        /([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)\s*(?:انچ\s*)?(?:گھیرا|gheera|ghera|daaman|daman)/gi
+      ]
+    },
+    {
+      key: 'collar',
+      labelEn: 'Collar',
+      labelUr: 'کالر / بین',
+      labelSd: 'ڪالر / بين',
+      regex: [
+        /(?:کالر|بین|collar|ban|bain|ڪالر|कॉलर|बैन)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/gi,
+        /([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)\s*(?:انچ\s*)?(?:کالر|بین|collar|ban|bain|ڪالر)/gi
+      ]
+    },
+    {
+      key: 'shalwar',
+      labelEn: 'Shalwar',
+      labelUr: 'شلوار',
+      labelSd: 'سٿڻ / شلوار',
+      regex: [
+        /(?:شلوار|shalwar|shalwarlambai|سٿڻ|सलوار)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/gi,
+        /([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)\s*(?:انچ\s*)?(?:شلوار|shalwar|salwar|سٿڻ)/gi
+      ]
+    },
+    {
+      key: 'pancha',
+      labelEn: 'Pancha',
+      labelUr: 'پانچہ',
+      labelSd: 'پانچو',
+      regex: [
+        /(?:پانچہ|pancha|paancha|poncha|پانچو|पाँचा)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/gi,
+        /([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)\s*(?:انچ\s*)?(?:پانچہ|pancha|paancha|poncha|پانچو)/gi
+      ]
+    },
+    {
+      key: 'waist',
+      labelEn: 'Waist',
+      labelUr: 'کمر',
+      labelSd: 'ڪمر',
+      regex: [
+        /(?:کمر|waist|kamar|ڪمر)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)/gi,
+        /([0-9]+(?:\.[0-9]+)?(?:\s*[1-3]\/[248])?)\s*(?:انچ\s*)?(?:کمر|waist|kamar|ڪمر)/gi
+      ]
+    }
+  ];
+
+  for (const item of patterns) {
+    const vals: string[] = [];
+    for (const r of item.regex) {
+      const matches = [...p.matchAll(r)];
+      for (const m of matches) {
+        if (m && m[1]) {
+          const num = m[1].trim();
+          if (num && !vals.includes(num)) {
+            vals.push(num);
+          }
+        }
+      }
+    }
+
+    if (vals.length > 0) {
+      // RULE: Always accept the LAST mentioned number as the true value
+      const chosen = vals[vals.length - 1];
+      measurements[item.key] = chosen;
+
+      if (vals.length > 1) {
+        conflicts.push({
+          key: item.key,
+          labelEn: item.labelEn,
+          labelUr: item.labelUr,
+          labelSd: item.labelSd,
+          values: vals,
+          chosen
+        });
+      }
+    }
+  }
+
+  return { measurements, conflicts };
+}
+
 // Tailoring fallback guidance when upstream AI is temporarily overloaded or rate limited
 function getSmartTailoringFallback(userPrompt: string, langCode: string = 'ur'): { reply: string; parsedMeasurements?: Record<string, string> } {
   const p = userPrompt.toLowerCase();
@@ -160,7 +308,7 @@ function getSmartTailoringFallback(userPrompt: string, langCode: string = 'ur'):
   if (p.includes("where") || p.includes("کہاں کے") || p.includes("location") || p.includes("city") || p.includes("gaon") || p.includes("گاؤں") || p.includes("ضلع") || p.includes("ڪٿان جا")) {
     if (isEn) return { reply: "The developer is from Sardar Pur Village, Tehsil Khanpur, District Shikarpur, Pakistan." };
     if (isSd) return { reply: "ڊولپر پاڪستان جي ضلعي شڪارپور، تعلقي خانپور ۽ ڳوٺ سردارپور جا رهاڪو آهن." };
-    if (isHi) return { reply: "डेवलपर पाकिस्तान के ज़िला शिकारपुर, तहसील खानपुर और गाँव सरदारपुर के रहने वाले हैं।" };
+    if (isHi) return { reply: "डेवलपर पाकिस्तान के ज़िला शिकारपुर, तहसील खानपुर اور गाँव सरदारपुर के रहने वाले हैं।" };
     return { reply: "ڈویلپر پاکستان کے ضلع شکارپور، تحصیل خانپور اور گاؤں سردارپور کے رہنے والے ہیں۔" };
   }
 
@@ -178,71 +326,69 @@ function getSmartTailoringFallback(userPrompt: string, langCode: string = 'ur'):
     return { reply: "پرچہ یا کپڑا فوٹو: آپ کیمرہ یا گیلری سے پرچے کی تصویر منسلک کر کے ناپ خودکار پہچان سکتے ہیں اور مستقل محفوظ رکھ سکتے ہیں۔" };
   }
   
-  // Try extracting measurements
-  const measurements: Record<string, string> = {};
-  const lengthMatch = p.match(/(?:لمبائی|lambai|length|ڊيگهه|لمبائي)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?)/i);
-  if (lengthMatch) measurements.length = lengthMatch[1];
-
-  const tiraMatch = p.match(/(?:تیرا|teera|tira|shoulder|ٽيرو|तीरा)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?)/i);
-  if (tiraMatch) measurements.shoulder = tiraMatch[1];
-
-  const bazoMatch = p.match(/(?:بازو|bazo|bazu|sleeve|sleeves|ٻانهن|बाजू)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?)/i);
-  if (bazoMatch) measurements.sleeves = bazoMatch[1];
-
-  const chestMatch = p.match(/(?:سینہ|چھاتی|seena|chest|ڇاتي|सीना)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?)/i);
-  if (chestMatch) measurements.chest = chestMatch[1];
-
-  const gheeraMatch = p.match(/(?:گھیرا|gheera|ghera|daaman|daman|دامن|घेरा)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?)/i);
-  if (gheeraMatch) measurements.daaman = gheeraMatch[1];
-
-  const collarMatch = p.match(/(?:کالر|بین|collar|ban|bain|ڪالر|कॉलर|बैन)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?)/i);
-  if (collarMatch) measurements.collar = collarMatch[1];
-
-  const shalwarMatch = p.match(/(?:شلوار|shalwar|shalwarlambai|سٿڻ|सलवार)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?)/i);
-  if (shalwarMatch) measurements.shalwar = shalwarMatch[1];
-
-  const panchaMatch = p.match(/(?:پانچہ|pancha|paancha|poncha|پانچو|पाँचा)\s*[:=۔-]?\s*([0-9]+(?:\.[0-9]+)?)/i);
-  if (panchaMatch) measurements.pancha = panchaMatch[1];
+  // Extract measurements using last-value rule and conflict detection
+  const { measurements, conflicts } = extractMeasurementsWithLastValueRule(userPrompt);
 
   if (Object.keys(measurements).length > 0) {
+    let conflictNotes = "";
+
+    if (conflicts.length > 0) {
+      if (isEn) {
+        conflictNotes = conflicts.map(c => 
+          `⚠️ Notice: Multiple values detected for ${c.labelEn} (${c.values.join(', ')}). The last value "${c.chosen}" is selected. Please confirm if you wish to adjust only ${c.labelEn}.`
+        ).join("\n") + "\n\n";
+      } else if (isSd) {
+        conflictNotes = conflicts.map(c => 
+          `⚠️ نوٽ: ${c.labelSd} لاءِ مختلف انگ مليا (${c.values.join(', ')}). آخري انگ "${c.chosen}" چونڊيو ويو آهي. جيڪڏهن درستگي گهربل هجي ته صرف ${c.labelSd} ٻڌايو.`
+        ).join("\n") + "\n\n";
+      } else {
+        conflictNotes = conflicts.map(c => 
+          `⚠️ نوٹ: ${c.labelUr} کے مختلف نمبر ملے تھے (${c.values.join(', ')}). میں نے آخری نمبر "${c.chosen}" درج کیا ہے۔ اگر مختلف ہے تو صرف ${c.labelUr} درست فرمائیں (پوری ناپ دوبارہ بتانے کی ضرورت نہیں)۔`
+        ).join("\n") + "\n\n";
+      }
+    }
+
     if (isEn) {
-      let preview = "Respected Master Tailor! Measurement details are recorded as follows:\n";
+      let preview = conflictNotes + "Respected Master Tailor! Final Clean Measurement List:\n";
       if (measurements.length) preview += `• Length: ${measurements.length}\n`;
       if (measurements.shoulder) preview += `• Shoulder: ${measurements.shoulder}\n`;
       if (measurements.sleeves) preview += `• Sleeves: ${measurements.sleeves}\n`;
       if (measurements.chest) preview += `• Chest: ${measurements.chest}\n`;
+      if (measurements.waist) preview += `• Waist: ${measurements.waist}\n`;
       if (measurements.daaman) preview += `• Daaman (Hem): ${measurements.daaman}\n`;
       if (measurements.collar) preview += `• Collar: ${measurements.collar}\n`;
       if (measurements.shalwar) preview += `• Shalwar / Trouser: ${measurements.shalwar}\n`;
       if (measurements.pancha) preview += `• Pancha (Bottom): ${measurements.pancha}\n`;
-      preview += "\nPlease review the preview above. These measurements will only be saved after your confirmation.";
+      preview += "\nPlease reply 'yes' or 'confirm' to save these measurements.";
       return { reply: preview, parsedMeasurements: measurements };
     }
 
     if (isSd) {
-      let preview = "محترم استاد صاحب! اوهان جي ڏنل ماپ جا تفصيل هيٺ ڏنل آهن:\n";
+      let preview = conflictNotes + "محترم استاد صاحب! ماپ جي صاف سٿري فائنل لسٽ:\n";
       if (measurements.length) preview += `• ڊيگهه / لمبائي: ${measurements.length}\n`;
       if (measurements.shoulder) preview += `• ٽيرو: ${measurements.shoulder}\n`;
       if (measurements.sleeves) preview += `• ٻانهن: ${measurements.sleeves}\n`;
       if (measurements.chest) preview += `• ڇاتي: ${measurements.chest}\n`;
+      if (measurements.waist) preview += `• ڪمر: ${measurements.waist}\n`;
       if (measurements.daaman) preview += `• دامن: ${measurements.daaman}\n`;
       if (measurements.collar) preview += `• ڪالر / بين: ${measurements.collar}\n`;
       if (measurements.shalwar) preview += `• سٿڻ / شلوار: ${measurements.shalwar}\n`;
       if (measurements.pancha) preview += `• پانچو: ${measurements.pancha}\n`;
-      preview += "\nمهرباني ڪري جائزو وٺو. اوهان جي تصديق کانپوءِ هي ماپ سلپ ۾ محفوظ ٿيندي.";
+      preview += "\nمهرباني ڪري 'yes' يا 'تصديق' لکو ته جيئن ماپ محفوظ ٿئي.";
       return { reply: preview, parsedMeasurements: measurements };
     }
 
-    let preview = "محترم ماسٹر صاحب! آپ کی فراہم کردہ ناپ درج ذیل ہے:\n";
+    let preview = conflictNotes + "محترم ماسٹر صاحب! ناپ کی فائنل صاف ستھری لسٹ:\n";
     if (measurements.length) preview += `• لمبائی (Length): ${measurements.length}\n`;
     if (measurements.shoulder) preview += `• تیرا (Tira): ${measurements.shoulder}\n`;
-    if (measurements.sleeves) preview += `• بازو (Bazo/Sleeve): ${measurements.sleeves}\n`;
+    if (measurements.sleeves) preview += `• بازو (Bazo): ${measurements.sleeves}\n`;
     if (measurements.chest) preview += `• سینہ (Chest): ${measurements.chest}\n`;
+    if (measurements.waist) preview += `• کمر (Waist): ${measurements.waist}\n`;
     if (measurements.daaman) preview += `• گھیرا (Gheera): ${measurements.daaman}\n`;
     if (measurements.collar) preview += `• کالر (Collar): ${measurements.collar}\n`;
     if (measurements.shalwar) preview += `• شلوار (Shalwar Length): ${measurements.shalwar}\n`;
     if (measurements.pancha) preview += `• پانچہ (Pancha): ${measurements.pancha}\n`;
-    preview += "\nبراہ کرم جائزہ لیں۔ آپ کی تصدیق (Confirmation) کے بعد ہی یہ ناپ سلپ میں محفوظ ہوگی۔";
+    preview += "\nبراہ کرم 'yes' یا 'جی ہاں' لکھ کر تصدیق کریں تاکہ یہ ناپ محفوظ ہو۔";
 
     return { reply: preview, parsedMeasurements: measurements };
   }
@@ -411,6 +557,9 @@ app.post("/api/chat", async (req, res) => {
           contents: message,
           config: {
             systemInstruction: dynamicSystemInstruction,
+            temperature: 0.2,
+            frequencyPenalty: 0.5,
+            presencePenalty: 0.3,
           }
         });
 

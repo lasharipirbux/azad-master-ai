@@ -352,202 +352,6 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
   const activeAvatarTheme = getAvatarColorByName(name, avatarColor);
   const avatarLetter = getCustomerInitial(name);
 
-  useEffect(() => {
-    (window as any).updateAvatarLetter = (newName: string) => {
-      setName(newName);
-    };
-    (window as any).previewAvatar = (event: any) => {
-      const file = event.target?.files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          setImageUri(reader.result as string);
-        };
-        reader.readAsDataURL(file);
-      }
-    };
-    return () => {
-      delete (window as any).updateAvatarLetter;
-      delete (window as any).previewAvatar;
-    };
-  }, []);
-
-  // Azad AI Voice & Text Naap Assistant state
-  const [showAiVoiceBox, setShowAiVoiceBox] = useState(false);
-  const [aiInputText, setAiInputText] = useState('');
-  const [aiPreviewData, setAiPreviewData] = useState<Partial<CustomerMeasurements> | null>(null);
-  const [isAiRecording, setIsAiRecording] = useState(false);
-
-  const isAiRecordingRef = useRef(false);
-  const recognitionRef = useRef<any>(null);
-  const accumulatedTranscriptRef = useRef('');
-
-  // Clean up speech recognition on modal unmount
-  useEffect(() => {
-    return () => {
-      isAiRecordingRef.current = false;
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort();
-        } catch {}
-      }
-    };
-  }, []);
-
-  const stopVoiceRecordAI = () => {
-    isAiRecordingRef.current = false;
-    setIsAiRecording(false);
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {}
-    }
-    const current = (accumulatedTranscriptRef.current.trim() + ' ' + aiInputText.trim()).trim();
-    if (current) {
-      const parsed = parseMeasurementsFromText(current);
-      if (parsed && Object.keys(parsed).length > 0) {
-        setAiPreviewData(parsed);
-      }
-    }
-  };
-
-  const startVoiceRecordAI = () => {
-    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      alert(isRtl ? "آپ کا براؤزر وائس ان پٹ کو سپورٹ نہیں کرتا۔" : "Your browser does not support voice input.");
-      return;
-    }
-
-    try {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort();
-        } catch {}
-      }
-
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      const recognition = new SpeechRecognition();
-      recognitionRef.current = recognition;
-
-      // Pakistani Urdu (ur-PK) for optimal local dialect, numerals, and tailoring terms
-      recognition.lang = 'ur-PK';
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.maxAlternatives = 1;
-
-      isAiRecordingRef.current = true;
-      setIsAiRecording(true);
-
-      // Preserve previously typed/spoken input as baseline
-      accumulatedTranscriptRef.current = aiInputText ? aiInputText.trim() + ' ' : '';
-
-      recognition.onstart = () => {
-        setIsAiRecording(true);
-      };
-
-      recognition.onresult = (event: any) => {
-        let sessionFinal = '';
-        let interim = '';
-
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          const trans = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            sessionFinal += trans + ' ';
-          } else {
-            interim += trans;
-          }
-        }
-
-        if (sessionFinal) {
-          accumulatedTranscriptRef.current += sessionFinal;
-        }
-
-        const fullSpoken = (accumulatedTranscriptRef.current + interim).trim();
-        if (fullSpoken) {
-          setAiInputText(fullSpoken);
-          const parsed = parseMeasurementsFromText(fullSpoken);
-          if (parsed && Object.keys(parsed).length > 0) {
-            setAiPreviewData(parsed);
-          }
-        }
-      };
-
-      recognition.onerror = (event: any) => {
-        console.warn("SpeechRecognition error in continuous mode:", event.error);
-        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-          isAiRecordingRef.current = false;
-          setIsAiRecording(false);
-          alert(isRtl 
-            ? "مائیک کی اجازت درکار ہے۔ براہ کرم براؤزر میں مائیکروفون الاؤ (Allow) کریں۔" 
-            : "Microphone permission denied. Please allow microphone access in browser settings.");
-        }
-        // Silence (no-speech) or network pauses: do NOT stop! onend will restart seamlessly.
-      };
-
-      recognition.onend = () => {
-        // Continuous listening: If user hasn't explicitly stopped, KEEP LISTENING through pauses & silence!
-        if (isAiRecordingRef.current) {
-          try {
-            recognition.start();
-          } catch (e) {
-            setTimeout(() => {
-              if (isAiRecordingRef.current) {
-                try {
-                  recognition.start();
-                } catch (restartErr) {
-                  console.warn("Speech recognition restart retry error:", restartErr);
-                }
-              }
-            }, 200);
-          }
-        } else {
-          setIsAiRecording(false);
-        }
-      };
-
-      recognition.start();
-    } catch (e) {
-      console.warn("SpeechRecognition start error:", e);
-      isAiRecordingRef.current = false;
-      setIsAiRecording(false);
-    }
-  };
-
-  const handleVoiceRecordAI = () => {
-    if (isAiRecording) {
-      stopVoiceRecordAI();
-    } else {
-      startVoiceRecordAI();
-    }
-  };
-
-  const handleParseAIText = (textToParse?: string) => {
-    const text = textToParse || aiInputText;
-    if (!text.trim()) return;
-    const parsed = parseMeasurementsFromText(text);
-    if (parsed && Object.keys(parsed).length > 0) {
-      setAiPreviewData(parsed);
-    } else {
-      alert(isRtl 
-        ? "کوئی ناپ نہیں پہچانی گئی۔ براہ کرم واضح بولیں یا لکھیں (مثلاً: لمبائی 42، تیرا 20، بازو 23، سینہ 38، گھیرا 25، کالر 15، شلوار 40، پانچہ 9)۔"
-        : "No measurements detected. Please write clearly like: Length 42, Tira 20, Bazo 23, Chest 38, Gheera 25, Collar 15, Shalwar 40, Pancha 9.");
-    }
-  };
-
-  const handleConfirmAIPreview = () => {
-    if (!aiPreviewData) return;
-    if (aiPreviewData.length) setLength(aiPreviewData.length);
-    if (aiPreviewData.shoulder) setShoulder(aiPreviewData.shoulder);
-    if (aiPreviewData.sleeves) setSleeves(aiPreviewData.sleeves);
-    if (aiPreviewData.chest) setChest(aiPreviewData.chest);
-    if (aiPreviewData.waist) setWaist(aiPreviewData.waist);
-    if (aiPreviewData.daaman) setDaaman(aiPreviewData.daaman);
-    if (aiPreviewData.collar) setCollar(aiPreviewData.collar);
-    if (aiPreviewData.shalwar) setShalwar(aiPreviewData.shalwar);
-    if (aiPreviewData.pancha) setPancha(aiPreviewData.pancha);
-    setAiPreviewData(null);
-    setShowAiVoiceBox(false);
-  };
-
   const applyPreset = (preset: 'standard' | 'slim' | 'thobe') => {
     if (preset === 'standard') {
       setLength('42');
@@ -767,49 +571,16 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
                 {t.customerName || (isRtl ? 'کسٹمر کی تصویر یا نام کا پہلا حرف' : 'Customer Photo or Initial Letter')}
               </label>
               <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (onOpenAiAssistant) {
-                      onOpenAiAssistant();
-                    } else {
-                      setShowAiVoiceBox(!showAiVoiceBox);
-                    }
-                  }}
-                  className="text-[10.5px] bg-[#075e54] hover:bg-[#054c44] text-white px-2.5 py-1 rounded-lg font-bold transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 shadow-2xs border border-[#128c7e]/40"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-[#25d366]" />
-                  <span>{t.assistant}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAiVoiceBox(true);
-                    if (!isAiRecording) {
-                      startVoiceRecordAI();
-                    } else {
-                      stopVoiceRecordAI();
-                    }
-                  }}
-                  className={`text-[10.5px] px-2.5 py-1 rounded-lg cursor-pointer transition-all duration-200 border flex items-center gap-1.5 font-bold ${
-                    isAiRecording
-                      ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-400 shadow-md ring-2 ring-rose-400 animate-pulse'
-                      : 'bg-[#075e54] hover:bg-[#054c44] text-[#dcf8c6] border-[#128c7e]/30'
-                  }`}
-                  title={isAiRecording ? (isRtl ? 'ریکارڈنگ روکیں' : 'Stop Listening') : (isRtl ? 'وائس ناپ (مسلسل مائیک)' : 'Voice Input (Continuous)')}
-                >
-                  {isAiRecording ? (
-                    <>
-                      <Square className="w-3 h-3 fill-white" />
-                      <span>{isRtl ? 'ریکارڈنگ آن...' : 'Recording...'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Mic className="w-3.5 h-3.5 text-[#25d366]" />
-                      <span>{isRtl ? 'وائس ناپ' : 'Voice'}</span>
-                    </>
-                  )}
-                </button>
+                <label className="text-[10.5px] bg-[#075e54] hover:bg-[#054c44] text-white px-2.5 py-1 rounded-lg font-bold transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 shadow-2xs border border-[#128c7e]/40">
+                  <Camera className="w-3.5 h-3.5 text-[#25d366]" />
+                  <span>{isRtl ? 'کیمرہ اسکین' : 'Camera'}</span>
+                  <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" />
+                </label>
+                <label className="text-[10.5px] bg-[#128c7e] hover:bg-[#0f766a] text-white px-2.5 py-1 rounded-lg cursor-pointer transition-all border border-[#128c7e]/30 flex items-center gap-1.5 font-bold">
+                  <ImageIcon className="w-3.5 h-3.5 text-amber-300" />
+                  <span>{isRtl ? 'گیلری پرچی' : 'Gallery'}</span>
+                  <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                </label>
               </div>
             </div>
             
@@ -993,154 +764,6 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
               </div>
             )}
           </div>
-
-          {/* Expanded AI Voice / Text Panel */}
-          {showAiVoiceBox && (
-            <div className="bg-emerald-950 text-white p-3 rounded-xl border border-emerald-700/80 space-y-2 animate-in fade-in duration-150 shrink-0">
-              <p className="text-[11px] text-emerald-100 leading-tight">
-                {isRtl 
-                  ? 'ایک جملے میں تمام ناپیں بولیں یا لکھیں، مثلاً: "لمبائی 40، تیرا 18، بازو 22، چھاتی 38، کمر 36، گھیر 26، کالر 15.5، شلوار 37، پانچا 8.5"'
-                  : 'Speak or type all measurements (e.g. "Length 40, Shoulder 18, Sleeve 22, Chest 38, Waist 36, Daaman 26, Collar 15.5, Shalwar 37, Pancha 8.5")'}
-              </p>
-
-              {isAiRecording && (
-                <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-rose-500/25 border border-rose-400/60 text-white text-[11px] animate-pulse">
-                  <div className="flex items-center gap-2 font-medium">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-400 animate-ping shrink-0" />
-                    <span>{isRtl ? '🎙️ مسلسل مائیک آن ہے (ur-PK)... وقفے پر بند نہیں ہوگا۔ جب تمام ناپ بول لیں تو روک دیں۔' : '🎙️ Continuous listening (ur-PK)... Speak freely with pauses.'}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={stopVoiceRecordAI}
-                    className="text-[10px] bg-rose-600 hover:bg-rose-700 text-white font-bold px-2 py-0.5 rounded cursor-pointer shrink-0 ml-2"
-                  >
-                    {isRtl ? 'بند کریں' : 'Stop'}
-                  </button>
-                </div>
-              )}
-
-              <div className="flex items-center gap-1.5" dir="ltr">
-                <button
-                  type="button"
-                  onClick={handleVoiceRecordAI}
-                  className={`w-9 h-9 rounded-lg text-white flex items-center justify-center shrink-0 shadow-xs cursor-pointer transition-all active:scale-95 ${
-                    isAiRecording
-                      ? 'bg-rose-600 hover:bg-rose-700 ring-2 ring-rose-400 animate-pulse'
-                      : 'bg-emerald-600 hover:bg-emerald-500'
-                  }`}
-                  title={isAiRecording ? (isRtl ? 'مائیک بند کریں' : 'Stop Listening') : (isRtl ? 'مائیک شروع کریں' : 'Start Voice Input')}
-                >
-                  {isAiRecording ? <Square className="w-4 h-4 fill-white" /> : <Mic className="w-4 h-4" />}
-                </button>
-                <input
-                  type="text"
-                  value={aiInputText}
-                  onChange={(e) => setAiInputText(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleParseAIText())}
-                  placeholder={isRtl ? "لمبائی 40، تیرا 18، بازو 22..." : "Length 40, Shoulder 18..."}
-                  className="flex-1 px-2.5 py-1.5 rounded-lg bg-emerald-900 border border-emerald-700 text-xs text-white placeholder-emerald-300/60 outline-none focus:ring-1 focus:ring-emerald-400"
-                  dir={isRtl ? 'rtl' : 'ltr'}
-                />
-                <button
-                  type="button"
-                  onClick={() => handleParseAIText()}
-                  className="px-2.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold shrink-0 transition-colors cursor-pointer"
-                >
-                  {isRtl ? 'چیک کریں' : 'Parse'}
-                </button>
-              </div>
-
-              {/* AI Measurement Preview with Confirmation */}
-              {aiPreviewData && Object.keys(aiPreviewData).length > 0 && (
-                <div className="bg-white text-slate-900 rounded-xl p-2.5 space-y-2 border border-emerald-300 shadow-md animate-in zoom-in-95 duration-100">
-                  <div className="flex items-center justify-between pb-1 border-b border-slate-200">
-                    <span className="font-bold text-emerald-900 flex items-center gap-1 text-[11px]">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
-                      {t.measurementPreviewTitle || (isRtl ? 'ناپ کا مکمل جائزہ' : 'Measurement Preview')}
-                    </span>
-                    <span className="text-[9px] bg-amber-100 text-amber-900 font-bold px-1.5 py-0.2 rounded">
-                      {t.needsConfirmation || (isRtl ? 'تصدیق درکار ہے' : 'Confirmation Needed')}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-1 text-[10px]">
-                    {aiPreviewData.length && (
-                      <div className="bg-slate-50 p-1 rounded border border-slate-200 flex justify-between">
-                        <span className="text-slate-500">{t.lengthLabel}:</span>
-                        <span className="font-bold text-slate-900">{aiPreviewData.length}</span>
-                      </div>
-                    )}
-                    {aiPreviewData.shoulder && (
-                      <div className="bg-slate-50 p-1 rounded border border-slate-200 flex justify-between">
-                        <span className="text-slate-500">{t.shoulderLabel}:</span>
-                        <span className="font-bold text-slate-900">{aiPreviewData.shoulder}</span>
-                      </div>
-                    )}
-                    {aiPreviewData.sleeves && (
-                      <div className="bg-slate-50 p-1 rounded border border-slate-200 flex justify-between">
-                        <span className="text-slate-500">{t.sleevesLabel}:</span>
-                        <span className="font-bold text-slate-900">{aiPreviewData.sleeves}</span>
-                      </div>
-                    )}
-                    {aiPreviewData.chest && (
-                      <div className="bg-slate-50 p-1 rounded border border-slate-200 flex justify-between">
-                        <span className="text-slate-500">{t.chestLabel}:</span>
-                        <span className="font-bold text-slate-900">{aiPreviewData.chest}</span>
-                      </div>
-                    )}
-                    {aiPreviewData.waist && (
-                      <div className="bg-slate-50 p-1 rounded border border-slate-200 flex justify-between">
-                        <span className="text-slate-500">{t.waistLabel}:</span>
-                        <span className="font-bold text-slate-900">{aiPreviewData.waist}</span>
-                      </div>
-                    )}
-                    {aiPreviewData.daaman && (
-                      <div className="bg-slate-50 p-1 rounded border border-slate-200 flex justify-between">
-                        <span className="text-slate-500">{t.daamanLabel}:</span>
-                        <span className="font-bold text-slate-900">{aiPreviewData.daaman}</span>
-                      </div>
-                    )}
-                    {aiPreviewData.collar && (
-                      <div className="bg-slate-50 p-1 rounded border border-slate-200 flex justify-between">
-                        <span className="text-slate-500">{t.collarLabel}:</span>
-                        <span className="font-bold text-slate-900">{aiPreviewData.collar}</span>
-                      </div>
-                    )}
-                    {aiPreviewData.shalwar && (
-                      <div className="bg-slate-50 p-1 rounded border border-slate-200 flex justify-between">
-                        <span className="text-slate-500">{t.shalwarLabel}:</span>
-                        <span className="font-bold text-slate-900">{aiPreviewData.shalwar}</span>
-                      </div>
-                    )}
-                    {aiPreviewData.pancha && (
-                      <div className="bg-slate-50 p-1 rounded border border-slate-200 flex justify-between">
-                        <span className="text-slate-500">{t.panchaLabel}:</span>
-                        <span className="font-bold text-slate-900">{aiPreviewData.pancha}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex gap-1.5 pt-0.5">
-                    <button
-                      type="button"
-                      onClick={handleConfirmAIPreview}
-                      className="flex-1 py-1 px-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      {t.confirmAndApplySlip || (isRtl ? 'تصدیق کریں' : 'Confirm')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAiPreviewData(null)}
-                      className="py-1 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-                    >
-                      {t.cancel}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Measurement Slip Box (Compact Fit) */}
           <div className="border border-emerald-200 rounded-xl p-2.5 bg-emerald-50/20 flex flex-col justify-between flex-1 space-y-2">
@@ -1798,31 +1421,61 @@ export const AddMeasurementModal: React.FC<AddMeasurementModalProps> = ({
               </div>
             </div>
 
-            {/* Photo Attachment Bar */}
-            <div className="flex items-center justify-between bg-white p-2 rounded-xl border border-slate-200">
-              <span className="text-[11px] font-semibold text-slate-600 flex items-center gap-1">
-                <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
-                {imageUri ? (t.savedSuccess || '✓ Photo Attached') : (t.paperSlipPhoto || (isRtl ? 'پرچہ / کپڑا فوٹو' : 'Paper / Cloth Photo'))}
-              </span>
-              <div className="flex gap-1.5">
-                <label className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-2 py-1 rounded text-[10px] font-bold border border-emerald-200 cursor-pointer transition-colors">
-                  <span>{t.gallery}</span>
-                  <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                </label>
-                <label className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-2 py-1 rounded text-[10px] font-bold border border-emerald-200 cursor-pointer transition-colors">
-                  <span>{t.camera}</span>
-                  <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" />
-                </label>
-                {imageUri && (
+            {/* Photo Attachment & Slip Preview Bar */}
+            <div className="space-y-2 bg-white p-2.5 rounded-xl border border-slate-200">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-[#075e54]" />
+                  {imageUri ? (isRtl ? '✓ پرچی کی تصویر منسلک ہے (محفوظ ہو گی)' : '✓ Handwritten Slip Attached') : (t.paperSlipPhoto || (isRtl ? 'پرچہ / کپڑا فوٹو اسکین' : 'Paper / Cloth Photo'))}
+                </span>
+                <div className="flex gap-1.5">
+                  <label className="bg-emerald-50 hover:bg-emerald-100 text-[#075e54] px-2.5 py-1 rounded-lg text-[10px] font-bold border border-emerald-200 cursor-pointer transition-colors shadow-2xs flex items-center gap-1">
+                    <ImageIcon className="w-3 h-3 text-amber-500" />
+                    <span>{t.gallery}</span>
+                    <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                  </label>
+                  <label className="bg-[#075e54] hover:bg-[#054c44] text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-colors cursor-pointer shadow-2xs flex items-center gap-1">
+                    <Camera className="w-3 h-3 text-[#25d366]" />
+                    <span>{t.camera}</span>
+                    <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" />
+                  </label>
+                </div>
+              </div>
+
+              {isOcrScanning && (
+                <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-[#075e54] font-bold flex items-center gap-2 animate-pulse">
+                  <Camera className="w-4 h-4 animate-spin text-[#25d366]" />
+                  <span>{isRtl ? 'تصویر کا موازنہ اور خودکار ناپ پڑھی جا رہی ہے...' : 'Scanning slip image and extracting measurements via OCR...'}</span>
+                </div>
+              )}
+
+              {imageUri && (
+                <div className="p-2 bg-[#f0faf4] rounded-xl border border-[#128c7e]/30 flex items-center justify-between gap-3 animate-in fade-in duration-150">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <img 
+                      src={imageUri} 
+                      alt="Attached Slip" 
+                      className="w-14 h-14 object-cover rounded-lg border border-[#128c7e]/40 shadow-xs shrink-0" 
+                    />
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-bold text-[#075e54] flex items-center gap-1">
+                        <span>📜</span>
+                        <span>{isRtl ? 'اصلی ہینڈ رائٹنگ پرچی / کیمرہ فوٹو' : 'Original Handwritten Slip'}</span>
+                      </p>
+                      <p className="text-[10px] text-slate-500 truncate">
+                        {isRtl ? 'یہ تصویر گاہک کے آرڈر کے ساتھ کلاؤڈ پر مستقل طور پر محفوظ رہے گی' : 'Permanently saved attached to order record'}
+                      </p>
+                    </div>
+                  </div>
                   <button
                     type="button"
                     onClick={() => setImageUri(null)}
-                    className="text-red-600 text-[10px] font-bold px-1.5 py-1 hover:bg-red-50 rounded"
+                    className="text-red-600 hover:text-red-800 text-[10px] font-bold px-2 py-1 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 shrink-0 cursor-pointer"
                   >
-                    {t.delete || (isRtl ? 'حذف' : 'Delete')}
+                    {t.delete || (isRtl ? 'حذف کریں' : 'Delete')}
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
             {/* Action Buttons */}

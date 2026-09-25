@@ -51,6 +51,7 @@ export interface Customer {
   balanceAmount?: number | string;
   notes?: string;
   avatarColor?: string;
+  updatedAt?: string;
 }
 
 export interface CountryCode {

@@ -59,7 +59,7 @@ export const PROD_FIREBASE_CREDENTIALS = {
   storageBucket: "azazd-master-pro.firebasestorage.app",
   messagingSenderId: "1024488085383",
   appId: "1:1024488085383:web:aae9b0d7e4330d47b56522",
-  firestoreDatabaseId: "ai-studio-azadmastertailor-5ebcf705-17cc-4a0d-a990-93d623364a7a",
+  firestoreDatabaseId: "(default)",
   oAuthClientId: "233024949239-q8uoq10lbaljbm3fob8396k8us09sl6n.apps.googleusercontent.com"
 } as const;
 
@@ -229,10 +229,12 @@ export const googleProvider = new GoogleAuthProvider();
 
 // Silence noisy transient connection warning logs during temporary offline states
 try {
-  setLogLevel('error');
+  setLogLevel('silent');
 } catch {}
 
-const firestoreDbId = activeFirebaseConfig.firestoreDatabaseId && activeFirebaseConfig.firestoreDatabaseId !== '(default)'
+const firestoreDbId = (activeFirebaseConfig.firestoreDatabaseId && 
+  activeFirebaseConfig.firestoreDatabaseId !== '(default)' &&
+  activeFirebaseConfig.projectId !== 'azazd-master-pro')
   ? activeFirebaseConfig.firestoreDatabaseId
   : undefined;
 
@@ -291,7 +293,10 @@ export function getActiveLocalUser(): LocalUserSession | null {
   try {
     const raw = localStorage.getItem(ACTIVE_SESSION_KEY);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && typeof parsed.uid === 'string' && parsed.uid.trim()) {
+        return parsed;
+      }
     }
   } catch (e) {}
   return null;

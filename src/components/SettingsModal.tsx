@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Customer, SupportedLanguage } from '../types';
 import { languageList } from '../data/translations';
+import { exportCustomersToExcelCsv, exportCustomersToJson } from '../utils/backupExport';
 import { 
   X, 
   User, 
@@ -17,7 +18,8 @@ import {
   Globe,
   Cloud,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  FileSpreadsheet
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -29,6 +31,7 @@ interface SettingsModalProps {
   onClearAllData: () => void;
   onClose: () => void;
   onOpenAppGuide: () => void;
+  onOpenPrivacy?: () => void;
   onOpenAiAssistant?: () => void;
   currentLang: SupportedLanguage;
   onChangeLanguage: (lang: SupportedLanguage) => void;
@@ -48,6 +51,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClearAllData,
   onClose,
   onOpenAppGuide,
+  onOpenPrivacy,
   onOpenAiAssistant,
   currentLang,
   onChangeLanguage,
@@ -57,12 +61,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   cloudRecordCount,
   lastCloudSyncTime,
 }) => {
-  const [name, setName] = useState(masterName);
+  const [name, setName] = useState<string>(() => {
+    if (masterName && masterName.trim()) return masterName.trim();
+    try {
+      const stored = localStorage.getItem('tailorShopName') || localStorage.getItem('azad_master_shop_name');
+      if (stored && stored.trim()) return stored.trim();
+    } catch {}
+    return 'Azad Master';
+  });
   const [photo, setPhoto] = useState<string | null>(masterPhoto);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [cloudSyncMsg, setCloudSyncMsg] = useState<string | null>(null);
-  
+
+  React.useEffect(() => {
+    if (masterName && masterName.trim()) {
+      setName(masterName.trim());
+    } else {
+      try {
+        const stored = localStorage.getItem('tailorShopName') || localStorage.getItem('azad_master_shop_name');
+        if (stored && stored.trim()) {
+          setName(stored.trim());
+        }
+      } catch {}
+    }
+  }, [masterName]);
+
   // Offline Syncing Toggle Enhancement State
   const [autoOfflineSync, setAutoOfflineSync] = useState<boolean>(() => {
     try {
@@ -118,7 +142,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdateProfile(name.trim() || (isRtl ? 'ماسٹر صاحب' : 'Master Tailor'), photo);
+    const cleanName = name.trim() || 'Azad Master';
+    try {
+      localStorage.setItem('tailorShopName', cleanName);
+      localStorage.setItem('azad_master_shop_name', cleanName);
+    } catch {}
+    onUpdateProfile(cleanName, photo);
     setSavedSuccess(true);
     setTimeout(() => {
       setSavedSuccess(false);
@@ -135,7 +164,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
     const backupPayload = {
       app: "Azad Master",
-      version: "1.0.0",
+      version: "1.0",
       exportDate: new Date().toISOString(),
       totalRecords: customers.length,
       customers: customers
@@ -150,6 +179,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
     setBackupSuccessMsg(isRtl ? 'بیک اپ فائل ڈاؤنلوڈ ہو گئی ہے!' : 'Backup file downloaded successfully!');
     setTimeout(() => setBackupSuccessMsg(null), 3000);
+  };
+
+  const handleExportExcel = () => {
+    if (customers.length === 0) {
+      alert(isRtl ? 'کوئی کسٹمر ریکارڈ موجود نہیں ہے!' : 'No customer records to export!');
+      return;
+    }
+    const ok = exportCustomersToExcelCsv(customers, isRtl);
+    if (ok) {
+      setBackupSuccessMsg(isRtl ? 'ایکسل شیٹ (Excel / CSV) ڈاؤنلوڈ ہو گئی ہے!' : 'Excel/CSV spreadsheet downloaded successfully!');
+      setTimeout(() => setBackupSuccessMsg(null), 3000);
+    }
   };
 
   const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -498,25 +539,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-2 pt-0.5">
+            <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+              {/* Excel Download Button */}
+              <button 
+                id="btn-backup-excel"
+                type="button"
+                onClick={handleExportExcel}
+                className="flex items-center justify-center gap-1 bg-emerald-700 hover:bg-emerald-800 text-white py-2 px-1.5 rounded-lg text-[11px] font-bold shadow-xs transition-all cursor-pointer active:scale-95 truncate"
+                title={isRtl ? 'ایکسل / CSV شیٹ ڈاؤن لوڈ کریں' : 'Download Excel / CSV sheet'}
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-200 shrink-0" />
+                <span className="truncate">{isRtl ? 'ایکسل شیٹ' : 'Excel Sheet'}</span>
+              </button>
+
               {/* Backup Data Button */}
               <button 
                 id="btn-backup-data"
                 type="button"
                 onClick={handleExportData}
-                className="flex items-center justify-center gap-1.5 bg-[#0d4a2a] hover:bg-[#09351e] text-white py-2 px-2.5 rounded-lg text-xs font-bold shadow-xs transition-all cursor-pointer active:scale-95"
+                className="flex items-center justify-center gap-1 bg-[#0d4a2a] hover:bg-[#09351e] text-white py-2 px-1.5 rounded-lg text-[11px] font-bold shadow-xs transition-all cursor-pointer active:scale-95 truncate"
+                title={isRtl ? 'مکمل JSON بیک اپ بنائیں' : 'Download JSON Backup'}
               >
-                <Download className="w-3.5 h-3.5 text-[#10b981]" />
-                <span>{isRtl ? 'بیک اپ بنائیں (Backup Data)' : 'Backup Data'}</span>
+                <Download className="w-3.5 h-3.5 text-[#10b981] shrink-0" />
+                <span className="truncate">{isRtl ? 'بیک اپ (JSON)' : 'JSON Backup'}</span>
               </button>
 
               {/* Restore Data Button */}
               <label 
                 id="btn-restore-data"
-                className="flex items-center justify-center gap-1.5 bg-[#0d4a2a] hover:bg-[#09351e] text-white py-2 px-2.5 rounded-lg text-xs font-bold shadow-xs cursor-pointer transition-all active:scale-95 text-center"
+                className="flex items-center justify-center gap-1 bg-[#0d4a2a] hover:bg-[#09351e] text-white py-2 px-1.5 rounded-lg text-[11px] font-bold shadow-xs cursor-pointer transition-all active:scale-95 text-center truncate"
+                title={isRtl ? 'پرانا بیک اپ بحال کریں' : 'Restore backup file'}
               >
-                <Upload className="w-3.5 h-3.5 text-emerald-300" />
-                <span>{isRtl ? 'بحال کریں (Restore Data)' : 'Restore Data'}</span>
+                <Upload className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+                <span className="truncate">{isRtl ? 'بحال کریں' : 'Restore'}</span>
                 <input 
                   type="file" 
                   accept=".json" 
@@ -576,7 +631,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-center justify-center gap-1.5 text-slate-800 font-bold text-xs">
               <span className="text-[#0d4a2a]">✂️ Azad Master (آزاد ماسٹر)</span>
               <span className="bg-emerald-100 text-[#0d4a2a] text-[9px] font-extrabold px-1.5 py-0.2 rounded-full border border-emerald-200">
-                v1.0.0
+                v1.0
               </span>
             </div>
             <p className="text-[11px] text-slate-600 font-medium">
@@ -585,6 +640,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <p className="text-[9.5px] text-slate-400">
               {isRtl ? 'تمام جملہ حقوق محفوظ ہیں © 2026 آزاد ماسٹر' : 'All Rights Reserved © 2026 Azad Master'}
             </p>
+
+            {onOpenPrivacy && (
+              <div className="pt-1.5 border-t border-slate-100 mt-1">
+                <button
+                  type="button"
+                  id="settings-read-privacy-btn"
+                  onClick={() => {
+                    onClose();
+                    onOpenPrivacy();
+                  }}
+                  className="w-full text-[11px] text-[#075e54] hover:text-[#128c7e] bg-[#e7f7ef] hover:bg-[#dcf8c6] border border-[#25d366]/30 rounded-lg py-1.5 px-2.5 font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#075e54]" />
+                  <span>{isRtl ? 'رازداری کی پالیسی (Privacy Policy)' : 'Read Privacy Policy'}</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Danger Zone: Clear Data */}

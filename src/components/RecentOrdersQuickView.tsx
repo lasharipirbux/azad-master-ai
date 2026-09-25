@@ -33,10 +33,11 @@ export const RecentOrdersQuickView: React.FC<RecentOrdersQuickViewProps> = memo(
     }
   };
 
-  // Take the most recent 6 orders (memoized)
-  const recentOrders = useMemo(() => customers.slice(0, 6), [customers]);
+  // Take the most recent 6 orders (memoized with null safety)
+  const safeList = useMemo(() => (Array.isArray(customers) ? customers.filter(Boolean) : []), [customers]);
+  const recentOrders = useMemo(() => safeList.slice(0, 6), [safeList]);
 
-  if (customers.length === 0) {
+  if (safeList.length === 0) {
     return null;
   }
 

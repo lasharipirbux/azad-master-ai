@@ -112,10 +112,11 @@ export const BulkMessagingModal: React.FC<BulkMessagingModalProps> = ({
     }
   };
 
-  const toggleCustomerId = (id: string) => {
+  const toggleCustomerId = (id: string | number) => {
+    const key = String(id);
     setSelectedIds((prev) => ({
       ...prev,
-      [id]: !prev[id],
+      [key]: !prev[key],
     }));
   };
 

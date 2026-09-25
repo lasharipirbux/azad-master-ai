@@ -168,21 +168,19 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
 
       recognition.onresult = (event: any) => {
         if (!isMountedRef.current) return;
-        let interim = '';
         let finalStr = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
+        for (let i = 0; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {
-            finalStr += event.results[i][0].transcript;
-          } else {
-            interim += event.results[i][0].transcript;
+            const trans = event.results[i][0]?.transcript;
+            if (trans) {
+              finalStr += trans + ' ';
+            }
           }
         }
-        const currentSpoken = finalStr || interim;
-        if (currentSpoken) {
-          setUserTranscript(currentSpoken);
-        }
-        if (finalStr.trim()) {
-          processSpokenMessage(finalStr.trim());
+        const cleanFinal = finalStr.trim();
+        if (cleanFinal) {
+          setUserTranscript(cleanFinal);
+          processSpokenMessage(cleanFinal);
         }
       };
 
@@ -193,7 +191,7 @@ export const VoiceConversationScreen: React.FC<VoiceConversationScreenProps> = (
           if (!isMutedRef.current && conversationState === 'listening') {
             setStatusNote(t.listeningVoice || 'Listening... please speak');
             setTimeout(() => {
-              if (isMountedRef.current && !isMutedRef.current && conversationState !== 'speaking') {
+              if (isMountedRef.current && !isMutedRef.current && (conversationState as string) !== 'speaking') {
                 startListening();
               }
             }, 600);
